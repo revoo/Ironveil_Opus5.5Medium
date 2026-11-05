@@ -289,7 +289,9 @@ export class GameScene extends Phaser.Scene {
           this.fx.shake(2 + e.charge * 4, 0.25);
           hud.hurtFlash = 1;
         } else if (e.byUs) {
-          hud.hits.push({ t: 0, amount: e.amount, x: this.session.obs.tanks.find((t) => t.id === e.target)?.x ?? 0, y: this.session.obs.tanks.find((t) => t.id === e.target)?.y ?? 0 });
+          // Hidden target (smoke/brush): confirm the hit at the aim point without revealing a position.
+          const tv = this.session.obs.tanks.find((t) => t.id === e.target);
+          hud.hits.push({ t: 0, amount: e.amount, x: tv?.x ?? hud.aimWorld.x, y: tv?.y ?? hud.aimWorld.y });
           this.d.audio.hitConfirm();
         }
         break;

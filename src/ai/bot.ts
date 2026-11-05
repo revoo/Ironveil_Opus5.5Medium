@@ -234,7 +234,9 @@ export class Bot {
     if (s.disturbance) {
       sc.investigate = 0.25 + 0.5 * this.memory.disturbanceScore(s.disturbance, s.tick);
       const age = s.tick - s.disturbance.tick;
-      if (!s.target && T.patience * T.stealth > 0.35 && age < 90 && s.disturbance.near && s.disturbance.kind === 'sound') {
+      const dd = Math.hypot(s.disturbance.x - s.pos.x, s.disturbance.y - s.pos.y);
+      // Patient, stealthy bots lie in wait when they hear a vehicle close by (engines/charging, not distant shots).
+      if (!s.target && !s.underFire && T.patience * T.stealth > 0.35 && age < 90 && (s.disturbance.cue === 'engine' || s.disturbance.cue === 'charge') && (s.disturbance.near || dd < 420)) {
         sc.ambush = 0.35 + 0.5 * T.patience * T.stealth;
       }
     }

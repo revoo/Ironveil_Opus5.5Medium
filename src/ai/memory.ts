@@ -40,6 +40,8 @@ export interface Disturbance {
   resolved: boolean;
   /** Sound band hint (near cues suggest an imminent threat). */
   near: boolean;
+  /** Most recent sound kind that fed this hypothesis (if any). */
+  cue: string | null;
 }
 
 export interface ShellTrack {
@@ -134,7 +136,7 @@ export class BotMemory {
       const frac = cue.band === 'near' ? 0.3 : 0.72;
       const ang = Math.atan2(sectorDir(cue.sector).y, sectorDir(cue.sector).x) + (this.rng.next() - 0.5) * (Math.PI / 4);
       const d = radius * frac * (0.8 + this.rng.next() * 0.4);
-      this.addDisturbance('sound', self.x + Math.cos(ang) * d, self.y + Math.sin(ang) * d, tick, SOUND_PRIORITY[cue.kind] ?? 0.4, cue.band === 'near');
+      this.addDisturbance('sound', self.x + Math.cos(ang) * d, self.y + Math.sin(ang) * d, tick, SOUND_PRIORITY[cue.kind] ?? 0.4, cue.band === 'near', cue.kind);
     }
 
     // Tracks: newly observed stamps suggest a route.
@@ -173,21 +175,22 @@ export class BotMemory {
     this.disturbances = this.disturbances.filter((d) => !d.resolved && tick - d.tick < 30 * 14);
   }
 
-  addDisturbance(kind: DisturbanceKind, x: number, y: number, tick: number, priority: number, near: boolean): void {
+  addDisturbance(kind: DisturbanceKind, x: number, y: number, tick: number, priority: number, near: boolean, cue: string | null = null): void {
     for (const d of this.disturbances) {
       if (Math.hypot(d.x - x, d.y - y) < 220) {
         // Merge: newer evidence nudges the estimate and refreshes it.
         d.x = d.x * 0.5 + x * 0.5;
         d.y = d.y * 0.5 + y * 0.5;
         d.tick = tick;
-        d.priority = Math.min(1, Math.max(d.priority, priority) + 0.05);
+        d.priority = Math.min(1, Math.max(d.priority, priority) + 0.02);
         d.near ||= near;
+        if (cue) d.cue = cue;
         d.resolved = false;
         if (kind === 'damage') d.kind = 'damage';
         return;
       }
     }
-    this.disturbances.push({ id: this.nextId++, kind, x, y, tick, priority, resolved: false, near });
+    this.disturbances.push({ id: this.nextId++, kind, x, y, tick, priority, resolved: false, near, cue });
     if (this.disturbances.length > 12) this.disturbances.sort((a, b) => b.tick - a.tick).length = 12;
   }
 

@@ -60,8 +60,26 @@ export const PERSONAS: Persona[] = [
 export const CALLSIGNS = ['Vance', 'Kestrel', 'Moth', 'Halloran', 'Rook', 'Sable', 'Juno', 'Brask', 'Tarn', 'Wren', 'Oskar', 'Petra', 'Grail', 'Ivo'];
 
 /** Deterministic persona per callsign so a bot keeps its character across matches. */
+const ROSTER: Record<string, string> = {
+  Vance: 'brawler',
+  Kestrel: 'marksman',
+  Moth: 'stalker',
+  Halloran: 'anchor',
+  Rook: 'flanker',
+  Sable: 'stalker',
+  Juno: 'flanker',
+  Brask: 'brawler',
+  Tarn: 'anchor',
+  Wren: 'scrapper',
+  Oskar: 'marksman',
+  Petra: 'scrapper',
+  Grail: 'anchor',
+  Ivo: 'stalker',
+};
+
 export function personaFor(name: string): Persona {
-  return PERSONAS[hashString(name) % PERSONAS.length]!;
+  const id = ROSTER[name];
+  return PERSONAS.find((p) => p.id === id) ?? PERSONAS[hashString(name) % PERSONAS.length]!;
 }
 
 /** Small persistent per-bot variation on top of the persona. */

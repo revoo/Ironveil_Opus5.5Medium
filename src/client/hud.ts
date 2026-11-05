@@ -239,7 +239,7 @@ export class HudScene extends Phaser.Scene {
       const b = this.settings.bindings;
       const k = (a: keyof typeof b) => codeLabel(b[a][0]!);
       const alpha = this.hint > 12 ? 1 - (this.hint - 12) / 2 : 1;
-      this.text('hint', 960, 1000, `${k('up')}${k('left')}${k('down')}${k('right')} drive · Mouse aim · hold ${k('fire')} to charge, release to fire · ${codeLabel(b.cancel[0]!)} cancel · ${k('smoke')} smoke · hold ${k('silent')} silent · ${k('scoreboard')} scores`, 22, '#c8d4e4', [0.5, 0.5]).setAlpha(alpha);
+      this.text('hint', 1230, 1048, `${k('up')}${k('left')}${k('down')}${k('right')} drive · Mouse aim · hold ${k('fire')} to charge, release to fire · ${codeLabel(b.cancel[0]!)} cancel · ${k('smoke')} smoke · hold ${k('silent')} silent · ${k('scoreboard')} scores`, 22, '#c8d4e4', [0.5, 0.5]).setAlpha(alpha);
     }
 
     if (m.showScoreboard) this.drawScoreboard(obs);
