@@ -380,6 +380,7 @@ export class Bot {
   // ---------------------------------------------------------------- callouts
   private say(text: string, tick: number, force = false): void {
     if (!force && tick - this.lastSay < 120) return;
+    if (this.chatter.some((c) => c.text === text && tick - c.tick < 300)) return;
     this.lastSay = tick;
     this.chatter.push({ text, tick });
     if (this.chatter.length > 8) this.chatter.shift();
