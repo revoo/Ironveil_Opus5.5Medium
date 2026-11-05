@@ -25,6 +25,9 @@ export interface Contact {
   /** Persistent per-acquisition velocity perception bias. */
   biasX: number;
   biasY: number;
+  /** Smoothed velocity inferred from successive sightings (before perception bias). */
+  estVx: number;
+  estVy: number;
   searched: boolean;
 }
 
@@ -49,6 +52,9 @@ export interface ShellTrack {
   firstSeen: number;
   decided: boolean;
 }
+
+/** Per-tick exponential smoothing of inferred velocity (~0.1 s time constant on top of physics). */
+const VELOCITY_SMOOTHING = 0.25;
 
 const SOUND_PRIORITY: Record<string, number> = { shot: 0.85, charge: 0.75, engine: 0.55, smoke: 0.45, explosion: 0.35 };
 
@@ -92,7 +98,7 @@ export class BotMemory {
       if (!c) {
         c = {
           id: t.id, x: t.x, y: t.y, vx: 0, vy: 0, hp: t.hp, visible: true, firstSeen: tick, lastSeen: tick,
-          noticedAt: tick, phase: t.phase, charge: t.charge, turret: t.turret, biasX: 0, biasY: 0, searched: false,
+          noticedAt: tick, phase: t.phase, charge: t.charge, turret: t.turret, biasX: 0, biasY: 0, estVx: 0, estVy: 0, searched: false,
         };
         this.contacts.set(t.id, c);
       }
@@ -104,12 +110,24 @@ export class BotMemory {
         c.biasX = this.rng.gauss() * this.diff.velNoise;
         c.biasY = this.rng.gauss() * this.diff.velNoise;
       }
+      // Motion is inferred from successive sightings, like a player reading the screen; the
+      // observation's velocity field is never used. Continuous tracking smooths the estimate (so a
+      // sudden reversal fools the bot briefly); any gap resets it to "no idea".
+      const dtTicks = tick - c.lastSeen;
+      if (!reacquired && dtTicks > 0 && dtTicks <= 3) {
+        const k = VELOCITY_SMOOTHING;
+        c.estVx += (((t.x - c.x) * TUNING.tickHz) / dtTicks - c.estVx) * k;
+        c.estVy += (((t.y - c.y) * TUNING.tickHz) / dtTicks - c.estVy) * k;
+      } else if (reacquired) {
+        c.estVx = 0;
+        c.estVy = 0;
+      }
       c.visible = true;
       c.x = t.x;
       c.y = t.y;
-      const sp = Math.hypot(t.vx, t.vy);
-      c.vx = t.vx + c.biasX * sp;
-      c.vy = t.vy + c.biasY * sp;
+      const sp = Math.hypot(c.estVx, c.estVy);
+      c.vx = c.estVx + c.biasX * sp;
+      c.vy = c.estVy + c.biasY * sp;
       c.hp = t.hp;
       c.lastSeen = tick;
       c.phase = t.phase;
@@ -120,10 +138,9 @@ export class BotMemory {
     const memTicks = this.diff.memorySec * TUNING.tickHz;
     for (const c of this.contacts.values()) {
       if (seen.has(c.id)) continue;
-      if (c.visible) {
-        c.visible = false;
-        this.addDisturbance('lost', c.x + c.vx * 0.6, c.y + c.vy * 0.6, tick, 0.7, false);
-      }
+      // Losing sight is handled by the search goal (possible positions + negative evidence),
+      // not by a single guessed point.
+      if (c.visible) c.visible = false;
       if (tick - c.lastSeen > memTicks) this.contacts.delete(c.id);
     }
     // Dead enemies seen dying are forgotten.

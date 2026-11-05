@@ -82,7 +82,7 @@ guided checklist against harmless targets.
 ## Testing
 
 ```bash
-npm test             # 133 tests: sim rules, perception fairness, AI behaviour, session, feel
+npm test             # 143 tests: sim rules, perception fairness, AI behaviour, session, feel
 npm run typecheck
 npm run soak -- 20 3 normal     # headless bot-vs-bot matches with behaviour metrics
 npm run map:preview             # ASCII map + validation

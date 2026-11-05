@@ -257,6 +257,43 @@ export class NavGrid {
     return out;
   }
 
+  /**
+   * Hull-reachable lattice points (every `stride` cells) within `maxDist` of travel from `from`,
+   * found by a bounded flood fill (no corner cutting). Used for "where could they have got to?".
+   */
+  reachableLattice(from: Vec, maxDist: number, stride = 3): Vec[] {
+    const s = this.nearestWalkable(from);
+    if (!s) return [];
+    const start = this.cellIndex(s);
+    const gen = ++this.gen;
+    const maxSteps = maxDist / this.cell;
+    const out: Vec[] = [];
+    let frontier = [start];
+    this.stamp[start] = gen;
+    for (let step = 0; frontier.length && step <= maxSteps; step++) {
+      const next: number[] = [];
+      for (const i of frontier) {
+        const [x, y] = this.xy(i);
+        if (x % stride === 0 && y % stride === 0) out.push(this.centre(i));
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!this.walkableCell(nx, ny)) continue;
+            if (dx && dy && (!this.walkableCell(x + dx, y) || !this.walkableCell(x, y + dy))) continue;
+            const ni = ny * this.cols + nx;
+            if (this.stamp[ni] === gen) continue;
+            this.stamp[ni] = gen;
+            next.push(ni);
+          }
+        }
+      }
+      frontier = next;
+    }
+    return out;
+  }
+
   /** Smoothed world-space waypoints (excluding the start position), ending at the goal. */
   findPath(from: Vec, to: Vec, opts: PathOptions = {}): Vec[] | null {
     const cells = this.findCellPath(from, to, opts);

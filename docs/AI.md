@@ -25,10 +25,20 @@ silent enemy occupies.
 
 - **Reaction delay.** A newly seen or re-acquired enemy is only "acknowledged" after a sampled delay
   (easy 450–700 ms, normal 250–450, hard 150–300). Being under fire shortens it by 30%.
-- **Imperfect motion reading.** Each acquisition gets a persistent velocity-perception bias
-  (difficulty-scaled), so leads are good but not perfect.
-- **Memory decays.** A lost contact is remembered for 4/7/10 s (easy/normal/hard). Losing sight
-  drops a "lost" disturbance where the contact was heading.
+- **Motion is inferred, not read.** Bots ignore the observation's velocity field. They estimate an
+  enemy's velocity from successive sightings, smoothed per tick, so after a sudden reversal they
+  still believe the old direction for a moment, and jukes work. On first sighting, or after any gap
+  in visibility, the estimate starts at zero, so a tank that has just broken out of brush or smoke
+  is hard to lead. A persistent, difficulty-scaled bias is applied on top.
+- **Memory decays.** A lost contact is remembered for 4/7/10 s (easy/normal/hard).
+- **Searching uses negative evidence.** When contact is lost, the bot works out where the enemy
+  *could* be: hull-reachable ground (a flood fill that follows corners and never enters sealed areas)
+  within 170 px/s × time since last sighting. It then removes every spot a living teammate can
+  currently see is empty. Brush beyond 110 px is never ruled out, because a tank there would be
+  invisible. It checks well-separated spots from what's left, preferring brush, the enemy's last
+  heading, and spots squadmates haven't claimed. Spots that become visibly empty are skipped without
+  driving onto them. It re-plans in up to four waves as the region grows, and gives up ("They're
+  gone") only when nowhere is left after about 3 s. Idea credited to the Sol 6.1 attempt.
 - **Disturbances are hypotheses.** A sound cue becomes a point along the cue's sector at a
   band-appropriate distance, jittered ±22°. Repeated cues merge and refine it. Tracks suggest the
   freshest stamp. A hit suggests a point back along the shell's path.

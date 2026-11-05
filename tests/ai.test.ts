@@ -103,7 +103,7 @@ describe('bot combat behaviour', () => {
     expect(minDist).toBeLessThan(d0 - 100);
   });
 
-  it('searches the last known position after losing contact instead of tracking the hidden enemy', () => {
+  it('searches around where contact was lost instead of tracking the hidden enemy', () => {
     const h = harness(openMap(70, 50), [
       { name: 'bot', team: 0, isBot: true, pos: { x: 400, y: 800 } },
       { name: 'ghost', team: 1, isBot: false, pos: { x: 780, y: 800 } },
@@ -114,14 +114,19 @@ describe('bot combat behaviour', () => {
     g.prevPos = { ...g.pos };
     let minToLast = Infinity;
     let minToGhost = Infinity;
+    let searchTicks = 0;
     h.run(sec(7), () => {
       const b = h.world.tank(0);
+      if (h.controllers[0]!.bot(0).goal === 'search') searchTicks++;
       minToLast = Math.min(minToLast, Math.hypot(b.pos.x - 780, b.pos.y - 800));
       minToGhost = Math.min(minToGhost, Math.hypot(b.pos.x - g.pos.x, b.pos.y - g.pos.y));
       return {};
     });
-    expect(minToLast).toBeLessThan(140);
+    // It hunts the area where contact was lost (pushing past ground it can already see is empty)...
+    expect(minToLast).toBeLessThan(260);
+    // ...and never drifts toward where the hidden enemy really is.
     expect(minToGhost).toBeGreaterThan(500);
+    expect(searchTicks).toBeGreaterThan(sec(1));
   });
 
   it('uses smoke or breaks contact when badly hurt under fire', () => {

@@ -10,7 +10,7 @@ Tag `v0.1.0`: [GitHub Actions run 42108450010](https://github.com/revoo/Ironveil
 **passed**. It ran on a clean Ubuntu runner with Node 24: `npm ci`, typecheck, all tests, production
 build, a 10-match headless soak, and the build artifact upload.
 
-## Automated tests: 133 passing (`npm test`)
+## Automated tests: 143 passing (`npm test`)
 
 | Suite | Tests | What it establishes |
 |---|---:|---|
@@ -25,10 +25,12 @@ build, a 10-match headless soak, and the build artifact upload.
 | match | 7 | Countdown freeze, kill target, time limit, sudden death win/draw, safe respawn choice with protection |
 | nav | 7 | Hull-safe paths, no corner cutting, unreachable → null, exposure-aware route choice, smoothing, cross-map path time, unwalkable snap |
 | planner + aim | 7 | GOAP chaining, context-costed choice (tap close / charge far), smoke vs. plain retreat, impossible goals; intercept maths |
-| ai | 12 | Reaction delay; **identical decisions whatever a hidden enemy's real position**; engages; leads a strafing target; investigates an unseen shot; searches the last-known position instead of tracking the hidden enemy; smokes or breaks contact when crippled; dodges a visible shell; keeps moving in duels; squad assigns pressure + flank; 150 s 3v3 with kills and nobody stuck ≥ 20 s; determinism |
+| ai | 12 | Reaction delay; **identical decisions whatever a hidden enemy's real position**; engages; leads a strafing target; investigates an unseen shot; searches (actually running the search goal) around where contact was lost instead of tracking the hidden enemy; smokes or breaks contact when crippled; dodges a visible shell; keeps moving in duels; squad assigns pressure + flank; 150 s 3v3 with kills and nobody stuck ≥ 20 s; determinism |
 | session | 8 | Same result at 60 fps vs uneven 144/20 fps frame mixes; interpolation alpha; one input sample per tick; catch-up cap; pause freezes timers and resume needs fresh fire input; restart; distinct rosters/personas |
 | feel | 6 | Spring overshoot and settle, frame-rate independence, charge-scaled recoil (full ≥ 2.5× tap), reduced motion removes hull/camera kick; interpolation snaps on reveal; exact shell back-projection |
 | input | 6 | Space = fire, Q = smoke; tap between ticks never lost; hold edges; dual bindings act as one button; focus loss cancels instead of firing; remapping respected |
+| ai-memory | 5 | Velocity is inferred from successive sightings: the observation velocity field is ignored, there is no estimate on first sighting, it converges in about 0.5 s, lags a sudden reversal, and resets after a visibility gap |
+| ai-search | 5 | Possible-position region grows with age, excludes everything a teammate can see is empty, keeps brush beyond 110 px, follows reachable ground around corners but never into sealed areas, and is bounded |
 | training | 3 | Checklist progression, ignores other tanks' shots and stationary-target hits; harmless, moving targets |
 
 **Test-first note:** most suites were written before their implementation and run red first (module
@@ -37,6 +39,10 @@ planner, ai, session, feel and training. The `input` suite and the `content` che
 their code, as characterisation tests. During development, several tests were corrected when they
 encoded an impossible or unfair scenario (for example, a dodge test where the bot was driving into a
 point-blank shell, and turret pre-aim in observation tests). Those changes are visible in the git history.
+
+## AI update: inferred velocity and negative-evidence search
+
+Both ideas came from reviewing the Sol 6.1 attempt. A 30-match Veteran soak after the change, compared with the 100-match run below: bot hit rate went from 38.4% to 34.3%, because jukes and fresh reveals now cost bots shots. Real search behaviour went from 0.3% to 14.2% of bot time, and single-point investigation from 37% to 23%. Kills per match 26.3, sides 13/17, longest stationary 6.3 s, 0.092 ms per tick. The 100-match table below predates this change.
 
 ## Headless bot-vs-bot soak (`npm run soak`)
 

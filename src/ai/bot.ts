@@ -13,7 +13,7 @@ import { interceptPoint } from './aim';
 import { BotMemory, type Contact, type Disturbance } from './memory';
 import { Motor } from './motor';
 import type { NavGrid } from './nav';
-import { findCoverSpot, findFiringSpot, findSearchSpots, los, nearestLandmarkName, type TacCtx } from './tactics';
+import { chooseSearchSpots, clearedByTeam, findCoverSpot, findFiringSpot, los, nearestLandmarkName, possiblePositions, type TacCtx } from './tactics';
 import type { DifficultyProfile, Traits } from './personality';
 
 export type Role = 'pressure' | 'support' | 'flank' | 'hunt';
@@ -50,6 +50,8 @@ export interface BotSituation {
   targetAimingAtUs: boolean;
   lateral: number;
   underFire: boolean;
+  /** Living teammates (including self): the eyes that can rule places out. */
+  allies: Vec[];
   /** 0..1 willingness to spend smoke (difficulty x caution). */
   smokeWill: number;
   chargeBias: number;
@@ -82,6 +84,8 @@ interface ActionRun {
   lastSeen?: number;
   disturbance?: Disturbance | null;
   contact?: Contact | null;
+  waves?: number;
+  heading?: Vec | null;
 }
 
 export class Bot {
@@ -151,6 +155,7 @@ export class Bot {
     if (this.sit) {
       this.sit.self = self;
       this.sit.pos = { x: self.x, y: self.y };
+      this.sit.allies = alliesOf(obs, self);
     }
     this.execute(self, tac, tick);
     return this.motor.produce(self, tick);
@@ -208,6 +213,7 @@ export class Bot {
       targetAimingAtUs: aimingAtUs,
       lateral,
       underFire: tick < this.memory.underFireUntil,
+      allies: alliesOf(_obs, self),
       smokeWill: smokeWillingness(this.diff, this.traits),
       chargeBias: this.traits.chargeBias,
     };
@@ -240,7 +246,7 @@ export class Bot {
         sc.ambush = 0.35 + 0.5 * T.patience * T.stealth;
       }
     }
-    if (s.lost && s.tick - s.lost.lastSeen < this.diff.memorySec * 30) sc.search = 0.42 + 0.15 * T.patience + 0.1 * T.aggression;
+    if (s.lost && s.tick - s.lost.lastSeen < this.diff.memorySec * 30) sc.search = 0.55 + 0.15 * T.patience + 0.1 * T.aggression;
     if (s.target) {
       sc.investigate *= 0.3;
       sc.search *= 0.3;
@@ -550,9 +556,13 @@ export class Bot {
         run.contact = c;
         const sp = Math.hypot(c.vx, c.vy);
         const heading = sp > 20 ? { x: c.vx / sp, y: c.vy / sp } : null;
-        run.spots = findSearchSpots(tac, c, heading, s.pos, this.rng, 1 + Math.round(T.patience * 2));
+        // Negative evidence: only search where they could have got to that no teammate can see is empty.
+        run.heading = heading;
+        run.waves = 0;
+        run.spots = this.searchWave(run, s, tac, tick) ?? [{ x: c.x, y: c.y }];
         run.i = 0;
         run.until = 0;
+        run.spot = run.spots[0]!;
         this.motor.goTo(run.spots[0]!, { ...this.moveOpts(s, { silentNear: c }), arrive: 50 });
         return 'run';
       }
@@ -575,6 +585,17 @@ export class Bot {
       }
     }
     return 'fail';
+  }
+
+  /** One wave of search spots from current possible positions (null when nothing is left to check). */
+  private searchWave(run: ActionRun, s: BotSituation, tac: TacCtx, tick: number): Vec[] | null {
+    const c = run.contact;
+    if (!c || (run.waves ?? 0) >= 4) return null;
+    const possible = possiblePositions(tac, c, tick - c.lastSeen, s.allies);
+    const spots = chooseSearchSpots(tac, possible, c, run.heading ?? null, s.pos, s.orders.claimed, this.rng, 2 + Math.round(this.traits.patience * 2));
+    if (spots.length === 0) return null;
+    run.waves = (run.waves ?? 0) + 1;
+    return spots;
   }
 
   private tickExec(run: ActionRun, self: TankView, tac: TacCtx, tick: number): Status {
@@ -682,16 +703,37 @@ export class Bot {
           this.lookAround(run, s, tick, null);
           return 'run';
         }
-        if (run.until && tick >= run.until) {
+        // A spot a teammate (or we) can now see is empty is ruled out without driving onto it.
+        const ruledOut = !run.until && Math.hypot(spot.x - s.pos.x, spot.y - s.pos.y) > 70 && clearedByTeam(tac, spot, s.allies);
+        if ((run.until && tick >= run.until) || ruledOut) {
           run.i = i + 1;
           run.until = 0;
           run.sweepBase = undefined;
           if (run.i >= spots.length) {
+            // Re-plan from the (now larger) region of possible positions before giving up.
+            const next = this.searchWave(run, s, tac, tick);
+            if (next) {
+              run.spots = next;
+              run.i = 0;
+              run.until = 0;
+              run.sweepBase = undefined;
+              run.spot = next[0]!;
+              this.motor.goTo(next[0]!, { ...this.moveOpts(s, { silentNear: next[0] }), arrive: 50 });
+              return 'run';
+            }
+            const age = run.contact ? tick - run.contact.lastSeen : 999;
+            if (age < 90) {
+              // Too soon to tell: hold and watch while the possible region grows.
+              run.i = spots.length - 1;
+              run.until = tick + 10;
+              return 'run';
+            }
             if (run.contact) run.contact.searched = true;
             this.memory.resolveNear(spot.x, spot.y, 300);
-            this.say('Nothing here.', tick);
+            this.say(run.waves && run.waves > 1 ? 'Swept everywhere they could be. They’re gone.' : 'Nothing here.', tick);
             return 'done';
           }
+          run.spot = spots[run.i]!;
           this.motor.goTo(spots[run.i]!, { ...this.moveOpts(s, { silentNear: spots[run.i] }), arrive: 50 });
           return 'run';
         }
@@ -803,4 +845,8 @@ const ACTIONS: ActionDef<BotSituation>[] = [
 /** Smoke willingness differs by difficulty & caution; applied by the controller as a cost tweak. */
 export function smokeWillingness(diff: DifficultyProfile, traits: Traits): number {
   return diff.smokeUse * (0.4 + traits.caution * 0.6);
+}
+
+function alliesOf(obs: Observation, self: TankView): Vec[] {
+  return obs.tanks.filter((t) => t.team === self.team && t.alive).map((t) => ({ x: t.x, y: t.y }));
 }

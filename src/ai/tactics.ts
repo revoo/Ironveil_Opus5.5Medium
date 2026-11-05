@@ -153,6 +153,67 @@ export function findSearchSpots(ctx: TacCtx, last: Vec, heading: Vec | null, fro
   return out;
 }
 
+/** How far a hidden tank is assumed to be able to get per second (a little under top speed). */
+const SPREAD_SPEED = 170;
+const MAX_HYPOTHESES = 160;
+
+/**
+ * Where a lost contact could plausibly be now: hull-reachable ground within the distance it could
+ * have covered since it was last seen, minus every spot a living teammate can currently see is
+ * empty ("negative evidence"). Brush beyond 110 px of an observer is never ruled out, because a
+ * tank there would not be visible. Uses only memory, static geometry, known smoke and teammates.
+ */
+export function possiblePositions(ctx: TacCtx, last: Vec, ageTicks: number, observers: Vec[]): Vec[] {
+  const radius = Math.min(560, 40 + (ageTicks / 30) * SPREAD_SPEED);
+  const pts = ctx.nav.reachableLattice(last, radius);
+  const vision = 440;
+  const brushVision = 110;
+  const out = pts.filter((p) => {
+    const brush = terrainAt(ctx.map, p.x, p.y) === Terrain.Brush;
+    for (const o of observers) {
+      const d = Math.hypot(p.x - o.x, p.y - o.y);
+      if (d > vision || (brush && d > brushVision)) continue;
+      if (los(ctx, o, p)) return false;
+    }
+    return true;
+  });
+  if (out.length <= MAX_HYPOTHESES) return out;
+  const stride = out.length / MAX_HYPOTHESES;
+  return Array.from({ length: MAX_HYPOTHESES }, (_, i) => out[Math.floor(i * stride)]!);
+}
+
+/** Pick well-separated places worth checking from the possible positions. */
+export function chooseSearchSpots(ctx: TacCtx, possible: Vec[], last: Vec, heading: Vec | null, from: Vec, claimed: Vec[], rng: Rng, count: number): Vec[] {
+  const scored = possible.map((p) => {
+    let s = rng.next() * 0.4 - Math.hypot(p.x - from.x, p.y - from.y) / 700;
+    if (terrainAt(ctx.map, p.x, p.y) === Terrain.Brush) s += 0.7;
+    if (heading) {
+      const dx = p.x - last.x;
+      const dy = p.y - last.y;
+      const l = Math.hypot(dx, dy) || 1;
+      s += ((dx * heading.x + dy * heading.y) / l) * 0.6;
+    }
+    for (const c of claimed) if (Math.hypot(c.x - p.x, c.y - p.y) < 160) s -= 1;
+    return { p, s };
+  });
+  scored.sort((a, b) => b.s - a.s);
+  const out: Vec[] = [];
+  for (const c of scored) {
+    if (out.length >= count) break;
+    if (out.every((q) => Math.hypot(q.x - c.p.x, q.y - c.p.y) > 140)) out.push(c.p);
+  }
+  return out;
+}
+
+/** True when a living teammate can currently see that a spot is empty. */
+export function clearedByTeam(ctx: TacCtx, p: Vec, observers: Vec[]): boolean {
+  const brush = terrainAt(ctx.map, p.x, p.y) === Terrain.Brush;
+  return observers.some((o) => {
+    const d = Math.hypot(p.x - o.x, p.y - o.y);
+    return d <= (brush ? 110 : 440) && los(ctx, o, p);
+  });
+}
+
 export function nearestLandmarkName(map: GameMap, p: Vec): string {
   let best = '';
   let bd = Infinity;
