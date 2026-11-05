@@ -157,7 +157,7 @@ export class Bot {
   }
 
   // ---------------------------------------------------------------- perception -> situation
-  private assess(obs: Observation, self: TankView, tac: TacCtx, tick: number): BotSituation {
+  private assess(_obs: Observation, self: TankView, tac: TacCtx, tick: number): BotSituation {
     const pos = { x: self.x, y: self.y };
     const ack = this.memory.acknowledged(tick);
     let target: Contact | null = null;
