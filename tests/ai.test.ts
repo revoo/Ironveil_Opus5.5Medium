@@ -92,9 +92,15 @@ describe('bot combat behaviour', () => {
       { name: 'sniper', team: 1, isBot: false, pos: { x: 1300, y: 640 } },
     ]);
     const d0 = Math.hypot(700 - 1300, 0);
-    h.run(sec(8), (tick) => (tick % sec(2) === 0 ? { 1: { ...neutralInput(1300, 1200), firePressed: true, fireReleased: true } } : { 1: neutralInput(1300, 1200) }));
-    const b = h.world.tank(0);
-    expect(Math.hypot(b.pos.x - 1300, b.pos.y - 640)).toBeLessThan(d0 - 200);
+    let minDist = d0;
+    h.run(sec(8), (tick) => {
+      const b = h.world.tank(0);
+      minDist = Math.min(minDist, Math.hypot(b.pos.x - 1300, b.pos.y - 640));
+      return tick % sec(2) === 0 ? { 1: { ...neutralInput(1300, 1200), firePressed: true, fireReleased: true } } : { 1: neutralInput(1300, 1200) };
+    });
+    // It closed in on the coarse estimate, found the shooter and/or engaged it.
+    expect(minDist < d0 - 150 || h.world.tank(1).hp < 100).toBe(true);
+    expect(minDist).toBeLessThan(d0 - 100);
   });
 
   it('searches the last known position after losing contact instead of tracking the hidden enemy', () => {

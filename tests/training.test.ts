@@ -57,7 +57,7 @@ describe('training session', () => {
     const p = s.world.tank(0).pos;
     for (const d of dummies) expect(Math.hypot(d.pos.x - p.x, d.pos.y - p.y)).toBeLessThan(900);
     const start = dummies.map((d) => ({ ...d.pos }));
-    s.advance(3, () => neutralInput(p.x, p.y));
+    for (let i = 0; i < 90; i++) s.advance(1 / 30, () => neutralInput(p.x, p.y));
     expect(dummies.some((d, i) => Math.hypot(d.pos.x - start[i]!.x, d.pos.y - start[i]!.y) > 100)).toBe(true);
     expect(s.world.projectiles.filter((pr) => pr.team === 1).length).toBe(0);
     expect(s.world.tank(0).hp).toBe(100);

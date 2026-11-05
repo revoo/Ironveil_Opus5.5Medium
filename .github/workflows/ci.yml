@@ -1,0 +1,32 @@
+name: CI
+
+# Conservative by design: runs only for release/checkpoint tags (v*) or when started manually.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit, simulation and AI tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Headless bot-vs-bot soak (10 full matches)
+        run: npx tsx tools/soak.ts 10 3 normal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ironveil-dist
+          path: dist
+          retention-days: 14

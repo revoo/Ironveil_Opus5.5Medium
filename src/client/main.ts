@@ -99,6 +99,7 @@ function mainMenu(): void {
       <div class="row"><label>Team size</label>${seg('size', [['1', '1v1'], ['2', '2v2'], ['3', '3v3'], ['4', '4v4']], String(settings.teamSize))}</div>
       <div class="actions">
         <button class="primary" id="deploy">Deploy</button>
+        <button id="train">Training</button>
         <button id="how">How to play</button>
         <button id="settings">Settings</button>
       </div>
@@ -107,9 +108,14 @@ function mainMenu(): void {
   wireSeg(d, 'diff', (v) => (settings.difficulty = v as Difficulty));
   wireSeg(d, 'size', (v) => (settings.teamSize = Number(v)));
   d.querySelector('#deploy')!.addEventListener('click', () => {
+    lastTraining = false;
     settings.playerName = ((d.querySelector('#name') as HTMLInputElement).value.trim() || 'You').slice(0, 14);
     saveSettings(settings);
     startMatch();
+  });
+  d.querySelector('#train')!.addEventListener('click', () => {
+    saveSettings(settings);
+    startMatch(true);
   });
   d.querySelector('#how')!.addEventListener('click', () => howTo(mainMenu));
   d.querySelector('#settings')!.addEventListener('click', () => settingsScreen(mainMenu));
@@ -242,7 +248,9 @@ function quitToMenu(): void {
   mainMenu();
 }
 
-function startMatch(): void {
+let lastTraining = false;
+function startMatch(training = lastTraining): void {
+  lastTraining = training;
   audio.unlock();
   hud = newHudModel();
   (window as unknown as { __ironveil: { hud: () => HudModel } }).__ironveil.hud = () => hud;
@@ -250,7 +258,7 @@ function startMatch(): void {
   inMatch = true;
   paused = false;
   const data: GameSceneData = {
-    cfg: { teamSize: settings.teamSize, difficulty: settings.difficulty, playerName: settings.playerName },
+    cfg: { teamSize: settings.teamSize, difficulty: settings.difficulty, playerName: settings.playerName, training },
     settings,
     input,
     audio,
@@ -282,7 +290,7 @@ function showResults(obs: Observation, session: LocalSession): void {
     </div>`,
     true,
   );
-  d.querySelector('#again')!.addEventListener('click', startMatch);
+  d.querySelector('#again')!.addEventListener('click', () => startMatch(false));
   d.querySelector('#menu')!.addEventListener('click', quitToMenu);
 }
 

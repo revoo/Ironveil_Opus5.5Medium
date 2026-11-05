@@ -167,20 +167,24 @@ export class HudScene extends Phaser.Scene {
       this.text(`hit${i}`, p.x, p.y - 40 - h.t * 40, `-${h.amount}`, 26, '#ffe6a0', [0.5, 0.5], '700').setAlpha(life);
     }
 
+    const training = m.session!.training;
+    if (training) this.drawTraining(training);
     // ---- top bar: score and timer
     const [s0, s1] = obs.match.scores;
     const mine = obs.team;
-    g.fillStyle(0x070a10, 0.62).fillRoundedRect(960 - 230, 14, 460, 74, 12);
-    this.text('s0', 960 - 70, 50, String(mine === 0 ? s0 : s1), 46, TEAMC[mine]!, [1, 0.5], '700');
-    this.text('s1', 960 + 70, 50, String(mine === 0 ? s1 : s0), 46, TEAMC[1 - mine]!, [0, 0.5], '700');
     const tr = Math.max(0, obs.match.timeRemaining);
-    const mm = Math.floor(tr / 60);
-    const ss = Math.floor(tr % 60);
-    const phaseLabel = obs.match.phase === 'countdown' ? `${Math.ceil(tr)}` : obs.match.phase === 'suddenDeath' ? `SD ${Math.ceil(tr)}` : `${mm}:${String(ss).padStart(2, '0')}`;
-    this.text('timer', 960, 40, phaseLabel, 30, obs.match.phase === 'suddenDeath' ? '#ff9a6a' : '#e8f0f8', [0.5, 0.5], '700');
-    this.text('target', 960, 72, `FIRST TO ${obs.match.killTarget}`, 15, '#8a96a8', [0.5, 0.5]);
-    this.text('t0', 960 - 215, 30, 'IRONVEIL', 14, TEAMC[0]!, [0, 0.5]);
-    this.text('t1', 960 + 215, 30, 'RUSTGUARD', 14, TEAMC[1]!, [1, 0.5]);
+    if (!training) {
+      g.fillStyle(0x070a10, 0.62).fillRoundedRect(960 - 230, 14, 460, 74, 12);
+      this.text('s0', 960 - 70, 50, String(mine === 0 ? s0 : s1), 46, TEAMC[mine]!, [1, 0.5], '700');
+      this.text('s1', 960 + 70, 50, String(mine === 0 ? s1 : s0), 46, TEAMC[1 - mine]!, [0, 0.5], '700');
+      const mm = Math.floor(tr / 60);
+      const ss = Math.floor(tr % 60);
+      const phaseLabel = obs.match.phase === 'countdown' ? `${Math.ceil(tr)}` : obs.match.phase === 'suddenDeath' ? `SD ${Math.ceil(tr)}` : `${mm}:${String(ss).padStart(2, '0')}`;
+      this.text('timer', 960, 40, phaseLabel, 30, obs.match.phase === 'suddenDeath' ? '#ff9a6a' : '#e8f0f8', [0.5, 0.5], '700');
+      this.text('target', 960, 72, `FIRST TO ${obs.match.killTarget}`, 15, '#8a96a8', [0.5, 0.5]);
+      this.text('t0', 960 - 215, 30, 'IRONVEIL', 14, TEAMC[0]!, [0, 0.5]);
+      this.text('t1', 960 + 215, 30, 'RUSTGUARD', 14, TEAMC[1]!, [1, 0.5]);
+    }
 
     // ---- countdown / banners
     if (obs.match.phase === 'countdown') this.text('cd', 960, 400, String(Math.ceil(tr)), 140, '#e8f4ff', [0.5, 0.5], '700');
@@ -242,6 +246,24 @@ export class HudScene extends Phaser.Scene {
     if (m.showDebug) {
       this.text('dbg', 1900, 1060, `${this.fpsAcc.fps.toFixed(0)} fps · worst ${this.fpsAcc.worstShown.toFixed(1)} ms · particles ${m.particles} · tick ${obs.tick}`, 16, '#8a96a8', [1, 1]);
     }
+  }
+
+  private drawTraining(tr: NonNullable<LocalSession['training']>): void {
+    const g = this.g;
+    const b = this.settings.bindings;
+    const keys = (s: string) => s.replace(/{(fire|cancel|smoke|silent)}/g, (_, a: keyof typeof b) => codeLabel(b[a][0]!));
+    const x = 1920 - 24 - 420;
+    const y = 300;
+    g.fillStyle(0x070a10, 0.7).fillRoundedRect(x, y, 420, 60 + tr.steps.length * 34 + 70, 12);
+    this.text('trt', x + 20, y + 30, tr.complete ? 'TRAINING COMPLETE' : 'TRAINING', 26, tr.complete ? '#9ff0c8' : '#e8f0f8', [0, 0.5], '700');
+    const cur = tr.current();
+    tr.steps.forEach((s, i) => {
+      const yy = y + 70 + i * 34;
+      const active = cur?.id === s.id;
+      this.text('trs' + i, x + 20, yy, (s.done ? '✔  ' : active ? '▶  ' : '•  ') + s.label, 20, s.done ? '#6fae8e' : active ? '#ffd27a' : '#a8b4c4', [0, 0.5], active ? '700' : '500');
+    });
+    const hint = tr.complete ? 'Esc → Quit to menu, then Deploy into a real match.' : keys(cur?.hint ?? '');
+    this.text('trh', x + 20, y + 70 + tr.steps.length * 34 + 16, hint, 18, '#e8f0f8', [0, 0.5]).setWordWrapWidth(390);
   }
 
   private drawMinimap(obs: Observation, me: TankView | undefined): void {

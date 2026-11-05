@@ -21,9 +21,9 @@ export const TUNING = {
     /** Acceleration when the request opposes current velocity (countersteer/brake). */
     brakeAccel: 1150,
     /** Lateral (sideways) velocity decay, px/s^2. Low = long drifts. */
-    lateralGrip: 330,
+    lateralGrip: 280,
     /** Velocity decay with no input, px/s^2 (coasting). */
-    coastDecel: 210,
+    coastDecel: 180,
     /** Decay when above the current speed cap (e.g. entering mud), px/s^2. */
     overspeedDecel: 520,
     /** Visual hull rotation toward requested direction, rad/s. */

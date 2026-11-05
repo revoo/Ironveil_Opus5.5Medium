@@ -11,6 +11,7 @@ import { neutralInput, type TankInput, type Team } from '../sim/types';
 import { DT } from '../sim/tuning';
 import { hashString, Rng } from '../sim/rng';
 import type { GameMap } from '../sim/map';
+import { DummyController, TrainingTracker, trainingTargetPositions } from './training';
 
 export interface SessionConfig {
   teamSize: number;
@@ -20,6 +21,8 @@ export interface SessionConfig {
   countdown?: number;
   killTarget?: number;
   timeLimit?: number;
+  /** Guided practice against harmless scripted targets. */
+  training?: boolean;
 }
 
 export interface TimedEvent {
@@ -38,6 +41,8 @@ export class LocalSession {
   paused = false;
   /** After resume, held buttons are ignored until released and pressed again. */
   needsFreshInput = false;
+  training: TrainingTracker | null = null;
+  private dummy: DummyController | null = null;
   private observers!: [TeamObserver, TeamObserver];
   private controllers!: [BotController, BotController];
   private acc = 0;
@@ -62,10 +67,20 @@ export class LocalSession {
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
     }
     const size = Math.max(1, Math.min(4, cfg.teamSize));
-    const tanks = [{ name: cfg.playerName, team: 0 as Team, isBot: false }];
-    for (let i = 1; i < size; i++) tanks.push({ name: pool.pop()!, team: 0, isBot: true });
-    for (let i = 0; i < size; i++) tanks.push({ name: pool.pop()!, team: 1, isBot: true });
+    const tanks: { name: string; team: Team; isBot: boolean; pos?: { x: number; y: number } }[] = [{ name: cfg.playerName, team: 0, isBot: false }];
+    if (cfg.training) {
+      const targets = trainingTargetPositions(map, map.spawns[0]![0]!);
+      ['Target A', 'Mover', 'Hidden'].forEach((name, i) => tanks.push({ name, team: 1, isBot: true, pos: targets[i]! }));
+    } else {
+      for (let i = 1; i < size; i++) tanks.push({ name: pool.pop()!, team: 0, isBot: true });
+      for (let i = 0; i < size; i++) tanks.push({ name: pool.pop()!, team: 1, isBot: true });
+    }
     const wc: ConstructorParameters<typeof World>[0] = { map, seed: this.seed, tanks };
+    if (cfg.training) {
+      wc.killTarget = 999;
+      wc.timeLimit = 60 * 60;
+      wc.countdown = 0;
+    }
     if (cfg.countdown !== undefined) wc.countdown = cfg.countdown;
     if (cfg.killTarget !== undefined) wc.killTarget = cfg.killTarget;
     if (cfg.timeLimit !== undefined) wc.timeLimit = cfg.timeLimit;
@@ -77,6 +92,9 @@ export class LocalSession {
       new BotController({ map, team: 0, seed: this.seed ^ 0x1234, difficulty: cfg.difficulty, members: members(0) }),
       new BotController({ map, team: 1, seed: this.seed ^ 0x4321, difficulty: cfg.difficulty, members: members(1) }),
     ];
+    this.training = cfg.training ? new TrainingTracker(this.playerId) : null;
+    this.dummy = cfg.training ? new DummyController(tanks.map((t, id) => ({ t, id })).filter(({ t }) => t.team === 1).map(({ id }) => id)) : null;
+    if (cfg.training) this.controllers[1] = new BotController({ map, team: 1, seed: 1, difficulty: cfg.difficulty, members: [] });
     this.botMeta.clear();
     for (const c of this.controllers) for (const b of c.allBots()) this.botMeta.set(b.id, { persona: b.personaTitle, team: b.team });
     this.obs = this.observers[0].observe(this.world);
@@ -136,12 +154,13 @@ export class LocalSession {
     }
     const inputs: Record<number, TankInput> = { [this.playerId]: playerInput };
     const enemyObs = this.observers[1].observe(this.world);
-    Object.assign(inputs, this.controllers[1].update(enemyObs));
+    Object.assign(inputs, this.dummy ? this.dummy.update(enemyObs, this.world.tick) : this.controllers[1].update(enemyObs));
     Object.assign(inputs, this.controllers[0].update(this.obs));
     this.world.step(inputs);
     this.prevObs = this.obs;
     this.obs = this.observers[0].observe(this.world);
     for (const e of this.obs.events) this.events.push({ tick: this.obs.tick, event: e });
+    this.training?.update(this.obs, this.obs.events);
     for (const c of this.obs.sounds[this.playerId] ?? []) this.cues.push({ tick: this.obs.tick, cue: c });
     if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
     if (this.cues.length > 100) this.cues.splice(0, this.cues.length - 100);
