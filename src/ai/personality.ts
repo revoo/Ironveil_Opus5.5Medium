@@ -26,7 +26,7 @@ export interface DifficultyProfile {
 export const DIFFICULTY: Record<Difficulty, DifficultyProfile> = {
   easy: { reactionMs: [450, 700], aimSigmaDeg: 6.5, leadSkill: 0.5, velNoise: 0.35, memorySec: 4, dodgeChance: 0.15, smokeUse: 0.35, flankUse: 0.35, thinkTicks: 5, holdDiscipline: 0.3 },
   normal: { reactionMs: [250, 450], aimSigmaDeg: 3.6, leadSkill: 0.82, velNoise: 0.2, memorySec: 7, dodgeChance: 0.42, smokeUse: 0.8, flankUse: 0.75, thinkTicks: 3, holdDiscipline: 0.6 },
-  hard: { reactionMs: [150, 300], aimSigmaDeg: 2.0, leadSkill: 0.96, velNoise: 0.1, memorySec: 10, dodgeChance: 0.7, smokeUse: 1, flankUse: 1, thinkTicks: 2, holdDiscipline: 0.85 },
+  hard: { reactionMs: [150, 300], aimSigmaDeg: 2.0, leadSkill: 0.96, velNoise: 0.1, memorySec: 10, dodgeChance: 0.7, smokeUse: 0.82, flankUse: 1, thinkTicks: 2, holdDiscipline: 0.85 },
 };
 
 export interface Traits {

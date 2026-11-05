@@ -114,7 +114,7 @@ Moth. The scoreboard shows your teammates' temperaments, and the results screen 
 | Lead skill | 0.50 | 0.82 | 0.96 |
 | Memory | 4 s | 7 s | 10 s |
 | Dodge chance | 15% | 42% | 70% |
-| Smoke use / flanking | rare / sometimes | normal / always | eager / always |
+| Smoke use / flanking | almost never / sometimes | when exposed / always | more readily / always |
 | Think rate | 6 Hz | 10 Hz | 15 Hz |
 
 HP, damage, vision, turret speed and movement are identical for everyone.
