@@ -175,6 +175,10 @@ export class TeamObserver {
       if (!own) this.lastSeen.set(t.id, { x: t.pos.x, y: t.pos.y, tick });
     }
 
+    // An enemy seen being destroyed is no longer "last known" anywhere.
+    for (const e of w.events) {
+      if (e.type === 'death' && e.team !== team && pointVisibleToTeam(w, team, e.pos, 30)) this.lastSeen.delete(e.tank);
+    }
     const markerTicks = ticks(TUNING.vision.lastKnownMarker);
     const lastKnown: LastKnown[] = [];
     for (const [id, s] of this.lastSeen) {

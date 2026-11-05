@@ -5,10 +5,12 @@ import { LocalSession, type SessionConfig } from '../game/session';
 import type { Observation, ObsEvent, TankView, SmokeView } from '../sim/observation';
 import { lerp, lerpAngle, type Vec } from '../sim/math';
 import { raycastWalls, terrainAt, Terrain } from '../sim/map';
-import { DT, TUNING } from '../sim/tuning';
+import { TUNING } from '../sim/tuning';
 import { WEAPON_TICKS } from '../sim/weapon';
 import { bakeTerrain, registerTextures, TEAM_COLORS } from './textures';
-import { DEPTH, FxSystem, Spring } from './fx';
+import { DEPTH, FxSystem } from './fx';
+import { Spring, recoilImpulse } from './feel';
+import { interpolateTank, shellRenderPos } from './interp';
 import type { InputManager } from './input';
 import type { AudioEngine } from './audio';
 import type { Settings } from './settings';
@@ -152,6 +154,11 @@ export class GameScene extends Phaser.Scene {
     this.d.hud.map = map;
     this.d.hud.session = this.session;
     this.input.setDefaultCursor('none');
+    try {
+      if (this.renderer.type === Phaser.WEBGL) cam.postFX.addVignette(0.5, 0.5, 0.95, 0.28);
+    } catch {
+      /* vignette is optional */
+    }
   }
 
   setPaused(p: boolean): void {
@@ -246,20 +253,17 @@ export class GameScene extends Phaser.Scene {
         const team = this.session.obs.tanks.find((t) => t.id === e.tank)?.team ?? 1;
         this.fx.muzzle(e.x, e.y, e.angle, e.charge, team);
         const ts = this.tanks.get(e.tank);
+        // Inertial, charge-scaled cosmetic recoil with spring settling (never touches the sim).
+        const imp = recoilImpulse(e.charge, reduced);
         if (ts) {
-          // Inertial, charge-scaled cosmetic recoil with spring settling.
-          ts.recoil.kick(-(140 + 360 * e.charge) * (reduced ? 0.5 : 1));
-          if (!reduced) {
-            const k = 40 + 150 * e.charge;
-            ts.kickX.kick(-Math.cos(e.angle) * k);
-            ts.kickY.kick(-Math.sin(e.angle) * k);
-          }
+          ts.recoil.kick(-imp.barrel);
+          ts.kickX.kick(-Math.cos(e.angle) * imp.hull);
+          ts.kickY.kick(-Math.sin(e.angle) * imp.hull);
         }
-        if (e.tank === pid && !reduced) {
-          const k = 30 + 160 * e.charge;
-          this.camKick.x.kick(-Math.cos(e.angle) * k);
-          this.camKick.y.kick(-Math.sin(e.angle) * k);
-          if (e.charge > 0.5) this.fx.shake(1.5 * e.charge, 0.15);
+        if (e.tank === pid) {
+          this.camKick.x.kick(-Math.cos(e.angle) * imp.camera);
+          this.camKick.y.kick(-Math.sin(e.angle) * imp.camera);
+          if (imp.shake > 0) this.fx.shake(imp.shake, 0.15);
         }
         this.d.audio.shot(e.charge, this.screenPan(e.x), e.tank === pid ? 0.9 : 0.75 * this.distVol(e.x, e.y, 1100));
         break;
@@ -352,7 +356,7 @@ export class GameScene extends Phaser.Scene {
       barrel: this.add.image(0, 0, 'barrel').setScale(0.5).setOrigin(0.05, 0.5).setDepth(DEPTH.tanks + 0.1),
       turret: this.add.image(0, 0, `turret${tex}`).setScale(0.5).setDepth(DEPTH.tanks + 0.2),
       glow: this.add.image(0, 0, 'glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.emissive).setVisible(false),
-      ghost: this.add.image(0, 0, `hull${tex}`).setScale(0.5).setDepth(DEPTH.overlay).setAlpha(0.35).setTintFill(t.team === 0 ? 0x9fe3ff : 0xffb08a).setVisible(false),
+      ghost: this.add.image(0, 0, `hull${tex}`).setScale(0.5).setDepth(DEPTH.overlay).setAlpha(0.5).setTint(t.team === 0 ? 0xbff0ff : 0xffc0a0).setBlendMode(Phaser.BlendModes.ADD).setVisible(false),
       label,
       recoil: new Spring(420, 20),
       kickX: new Spring(260, 16),
@@ -384,11 +388,11 @@ export class GameScene extends Phaser.Scene {
       const s = this.tankSprites(t);
       const p = prevMap.get(t.id);
       // A newly revealed enemy starts from its newly authorised state (no lerp from stale data).
-      const interp = p && p.alive && Math.hypot(p.x - t.x, p.y - t.y) < 60;
-      const x = interp ? lerp(p.x, t.x, a) : t.x;
-      const y = interp ? lerp(p.y, t.y, a) : t.y;
-      const hullA = interp ? lerpAngle(p.hull, t.hull, a) : t.hull;
-      const turA = interp ? lerpAngle(p.turret, t.turret, a) : t.turret;
+      const pose = interpolateTank(p, t, a);
+      const x = pose.x;
+      const y = pose.y;
+      const hullA = pose.hull;
+      const turA = pose.turret;
       s.x = x;
       s.y = y;
       s.recoil.step(dt);
@@ -468,8 +472,7 @@ export class GameScene extends Phaser.Scene {
         this.shells.set(p.id, s);
       }
       // Exact for linear flight: back-project from the latest authorised state.
-      const x = p.x - p.vx * DT * (1 - a);
-      const y = p.y - p.vy * DT * (1 - a);
+      const { x, y } = shellRenderPos(p, a);
       s.img.setPosition(x, y).setRotation(Math.atan2(p.vy, p.vx)).setScale(0.55 + p.charge * 0.55, 0.6 + p.charge * 0.6).setTint(own ? 0xc8f4ff : 0xff6a48);
       s.trail.push({ x, y });
       if (s.trail.length > 10) s.trail.shift();
@@ -522,11 +525,11 @@ export class GameScene extends Phaser.Scene {
     for (const lk of cur.lastKnown) {
       let gimg = this.ghosts[i];
       if (!gimg) {
-        gimg = this.add.image(0, 0, 'hull1').setScale(0.5).setDepth(DEPTH.overlay).setTintFill(0xff7a5a);
+        gimg = this.add.image(0, 0, 'hull1').setScale(0.5).setDepth(DEPTH.overlay).setTint(0xff6a4a);
         this.ghosts.push(gimg);
       }
       const life = 1 - lk.age / (TUNING.vision.lastKnownMarker * 30);
-      gimg.setVisible(true).setPosition(lk.x, lk.y).setAlpha(0.12 + 0.3 * life);
+      gimg.setVisible(true).setPosition(lk.x, lk.y).setAlpha(0.1 + 0.25 * life);
       this.overlayG.lineStyle(1, 0xff7a5a, 0.5 * life).strokeCircle(lk.x, lk.y, 26 + (1 - life) * 10);
       i++;
     }
@@ -559,20 +562,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makeSmoke(sm: SmokeView, now: number): SmokeSprite {
-    const n = this.d.settings.lowEffects ? 8 : 18;
+    const low = this.d.settings.lowEffects;
+    const core = low ? 5 : 9;
+    const rim = low ? 7 : 16;
     const puffs: SmokeSprite['puffs'] = [];
-    for (let k = 0; k < n; k++) {
-      const ang = k * 2.39996;
-      const rr = Math.sqrt((k + 0.5) / n) * sm.radius * 0.64;
-      const shade = 150 + Math.floor(Math.random() * 50);
+    const add = (ox: number, oy: number, base: number, shade: number, depthOff: number) => {
       const img = this.add
-        .image(sm.x, sm.y, `puff${k % 4}`)
-        .setDepth(DEPTH.smoke + (k % 3) * 0.01)
-        .setTint(Phaser.Display.Color.GetColor(shade, shade + 4, shade + 10))
+        .image(sm.x, sm.y, 'puff' + (puffs.length % 4))
+        .setDepth(DEPTH.smoke + depthOff)
+        .setTint(Phaser.Display.Color.GetColor(shade, shade + 3, shade + 9))
         .setRotation(Math.random() * 6);
-      puffs.push({ img, ox: Math.cos(ang) * rr, oy: Math.sin(ang) * rr, ph: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, base: (sm.radius * 0.95) / 64 });
+      puffs.push({ img, ox, oy, ph: Math.random() * 6, vr: (Math.random() - 0.5) * 0.5, base });
+    };
+    for (let k = 0; k < core; k++) {
+      const ang = k * 2.39996;
+      const rr = Math.sqrt((k + 0.5) / core) * sm.radius * 0.45;
+      add(Math.cos(ang) * rr, Math.sin(ang) * rr, (sm.radius * 1.0) / 64, 96 + Math.floor(Math.random() * 30), 0.02);
     }
-    const ring = this.add.image(sm.x, sm.y, 'ring').setDepth(DEPTH.smoke + 0.05).setScale((sm.radius * 2) / 128).setAlpha(0.35);
+    for (let k = 0; k < rim; k++) {
+      const ang = (k / rim) * Math.PI * 2 + Math.random() * 0.3;
+      const rr = sm.radius * (0.66 + Math.random() * 0.08);
+      add(Math.cos(ang) * rr, Math.sin(ang) * rr, (sm.radius * (0.42 + Math.random() * 0.12)) / 64, 120 + Math.floor(Math.random() * 40), 0.01 + (k % 2) * 0.02);
+    }
+    const ring = this.add.image(sm.x, sm.y, 'ring').setDepth(DEPTH.smoke + 0.05).setScale((sm.radius * 2) / 128).setAlpha(0.3).setTint(0xdfe6ee);
     const s: SmokeSprite = { id: sm.id, x: sm.x, y: sm.y, radius: sm.radius, puffs, ring, born: now, fading: 0 };
     this.smokes.set(sm.id, s);
     return s;
@@ -580,18 +592,22 @@ export class GameScene extends Phaser.Scene {
 
   private animateSmoke(s: SmokeSprite, now: number, f: number): void {
     const age = now - s.born;
-    const grow = Math.min(1, 0.75 + age * 1.2);
-    const still = this.d.settings.reducedMotion ? 0.2 : 1;
+    const grow = Math.min(1, 0.8 + age * 1.5);
+    const still = this.d.settings.reducedMotion ? 0.15 : 1;
+    const swirl = age * 0.08 * still;
+    const cs = Math.cos(swirl);
+    const sn = Math.sin(swirl);
     for (const p of s.puffs) {
-      const wob = Math.sin(now * 0.7 + p.ph) * 5 * still;
-      const drift = (1 - f) * 30;
+      const ox = p.ox * cs - p.oy * sn;
+      const oy = p.ox * sn + p.oy * cs;
+      const spread = 1 + (1 - f) * 0.5;
       p.img
-        .setPosition(s.x + p.ox * (1 + drift / 60) + wob, s.y + p.oy * (1 + drift / 60) + Math.cos(now * 0.6 + p.ph) * 5 * still)
-        .setScale(p.base * grow * (1 + 0.05 * Math.sin(now * 0.9 + p.ph) * still) * (1 + (1 - f) * 0.3))
+        .setPosition(s.x + ox * spread + Math.sin(now * 0.7 + p.ph) * 4 * still, s.y + oy * spread + Math.cos(now * 0.55 + p.ph) * 4 * still - (1 - f) * 12)
+        .setScale(p.base * grow * (1 + 0.06 * Math.sin(now * 0.8 + p.ph) * still) * (1 + (1 - f) * 0.35))
         .setRotation(p.img.rotation + p.vr * 0.016 * still)
-        .setAlpha(0.95 * f);
+        .setAlpha(0.92 * f);
     }
-    s.ring.setAlpha(Math.max(0, 0.35 - age * 0.4) * f);
+    s.ring.setAlpha(Math.max(0, 0.3 - age * 0.45) * f);
   }
 
   private renderWrecks(dt: number): void {

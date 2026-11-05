@@ -52,6 +52,18 @@ describe('team observation filtering', () => {
     expect(o.lastKnown).toEqual([]);
   });
 
+  it('clears the last-known marker of an enemy seen being destroyed', () => {
+    const w = mk([
+      { name: 'me', team: 0, pos: { x: 200, y: 400 } },
+      { name: 'b', team: 1, pos: { x: 500, y: 400 } },
+    ]);
+    const obs = new TeamObserver(0);
+    obs.observe(w);
+    w.applyDamageForTest(1, 1000, 0); // emits the death event for this observation
+    const o = obs.observe(w);
+    expect(o.lastKnown).toEqual([]);
+  });
+
   it('shows an enemy shell in vision without revealing the hidden shooter', () => {
     const w = mk([
       { name: 'me', team: 0, pos: { x: 1000, y: 400 } },

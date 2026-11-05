@@ -72,27 +72,7 @@ export interface SpawnCfg {
   stretch?: boolean;
 }
 
-export class Spring {
-  x = 0;
-  v = 0;
-  constructor(
-    private k: number,
-    private c: number,
-  ) {}
-  kick(v: number): void {
-    this.v += v;
-  }
-  step(dt: number): void {
-    let t = dt;
-    while (t > 0) {
-      const h = Math.min(t, 1 / 240);
-      const a = -this.k * this.x - this.c * this.v;
-      this.v += a * h;
-      this.x += this.v * h;
-      t -= h;
-    }
-  }
-}
+export { Spring } from './feel';
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -327,9 +307,8 @@ export class FxSystem {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const sp = radius * rnd(1.6, 2.6);
-      this.spawn(`puff${i % 4}`, x, y, { vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rnd(0.5, 0.9), s0: 0.3, s1: 0.9, a0: 0.8, a1: 0, drag: 4, vrot: rnd(-1, 1), tint: 0xc8ccd2, depth: DEPTH.smoke + 0.1 });
+      this.spawn(`puff${i % 4}`, x, y, { vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rnd(0.5, 0.9), s0: 0.3, s1: 0.9, a0: 0.8, a1: 0, drag: 4, vrot: rnd(-1, 1), tint: 0x9aa0a8, depth: DEPTH.smoke + 0.1 });
     }
-    this.light(x, y, 60, 0xffffff, 0.4, 0.2);
   }
 
   chargeMote(x: number, y: number, tint: number): void {
