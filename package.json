@@ -1,0 +1,27 @@
+{
+  "name": "ironveil",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Ironveil: top-down stealth tank combat, solo team deathmatch against tactical AI",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "soak": "tsx tools/soak.ts",
+    "map:preview": "tsx tools/map-preview.ts"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "3.2.7"
+  }
+}
