@@ -4,6 +4,12 @@ Measured on the development machine (Windows 11, Node 24.22, Chromium-based in-a
 numbers describe this build and are not capacity promises. Human-judged gates are tracked separately
 in [PLAYTEST.md](PLAYTEST.md), and all of them are **awaiting playtest**.
 
+## Release CI
+
+Tag `v0.1.0`: [GitHub Actions run 42108450010](https://github.com/revoo/Ironveil_Opus5.5Medium/actions/runs/42108450010)
+**passed**. It ran on a clean Ubuntu runner with Node 24: `npm ci`, typecheck, all tests, production
+build, a 10-match headless soak, and the build artifact upload.
+
 ## Automated tests: 133 passing (`npm test`)
 
 | Suite | Tests | What it establishes |
