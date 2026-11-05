@@ -7,7 +7,8 @@ import { lerp, lerpAngle, type Vec } from '../sim/math';
 import { raycastWalls, terrainAt, Terrain } from '../sim/map';
 import { TUNING } from '../sim/tuning';
 import { WEAPON_TICKS } from '../sim/weapon';
-import { bakeTerrain, registerTextures, TEAM_COLORS } from './textures';
+import { bakeTerrain, registerTextures, streetLamps, TEAM_COLORS } from './textures';
+import { LIGHT, TEAM } from './palette';
 import { DEPTH, FxSystem } from './fx';
 import { Spring, recoilImpulse } from './feel';
 import { interpolateTank, shellRenderPos } from './interp';
@@ -103,6 +104,7 @@ export class GameScene extends Phaser.Scene {
   private ended = false;
   private time0 = 0;
   private lastHoldBeep = -1;
+  private lamps: Vec[] = [];
 
   constructor() {
     super('game');
@@ -137,7 +139,8 @@ export class GameScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     cam.setZoom(ZOOM);
-    cam.setBackgroundColor(0x0b0e14);
+    cam.setBackgroundColor(LIGHT.clear);
+    this.lamps = streetLamps(map);
     this.fx = new FxSystem(this, this.d.settings.lowEffects, this.d.settings.reducedMotion);
 
     this.lightL = new CanvasLayer(this, 'lightmap', VIEW_W / 3, VIEW_H / 3, 3, DEPTH.light, Phaser.BlendModes.MULTIPLY);
@@ -348,7 +351,7 @@ export class GameScene extends Phaser.Scene {
     if (s) return s;
     const tex = t.team;
     const label = this.add
-      .text(0, 0, t.name, { fontFamily: 'Rajdhani, Segoe UI, sans-serif', fontSize: '9px', color: t.team === this.session.obs.team ? '#cfeeff' : '#ffc4b0', stroke: '#000', strokeThickness: 2 })
+      .text(0, 0, t.name, { fontFamily: 'Rajdhani, Segoe UI, sans-serif', fontSize: '9px', color: t.team === this.session.obs.team ? TEAM[0].ui : TEAM[1].ui, stroke: '#000', strokeThickness: 2 })
       .setOrigin(0.5, 0)
       .setResolution(3)
       .setDepth(DEPTH.overlay);
@@ -430,7 +433,7 @@ export class GameScene extends Phaser.Scene {
       const hpw = 30;
       const hpFrac = t.hp / TUNING.tank.maxHp;
       g.fillStyle(0x000000, 0.55).fillRect(x - hpw / 2 - 1, y - 30, hpw + 2, 4);
-      g.fillStyle(friendly ? 0x6fd3ff : 0xff7a5a, 0.95).fillRect(x - hpw / 2, y - 29, hpw * hpFrac, 2);
+      g.fillStyle(friendly ? TEAM[0].uiHex : TEAM[1].uiHex, 0.95).fillRect(x - hpw / 2, y - 29, hpw * hpFrac, 2);
       if (!friendly && t.inBrush) g.lineStyle(1, 0xff7a5a, 0.8).strokeCircle(x, y, 24);
       // ground FX: dust & drift spray (visible tanks only)
       const sp = Math.hypot(t.vx, t.vy);
@@ -660,7 +663,7 @@ export class GameScene extends Phaser.Scene {
     const lc = L.ctx;
     const bc = B.ctx;
     lc.globalCompositeOperation = 'source-over';
-    lc.fillStyle = '#a7aec8';
+    lc.fillStyle = LIGHT.ambient;
     lc.fillRect(0, 0, L.w, L.h);
     lc.globalCompositeOperation = 'lighter';
     bc.globalCompositeOperation = 'source-over';
@@ -697,6 +700,9 @@ export class GameScene extends Phaser.Scene {
       lc.closePath();
       lc.fill();
     };
+    // sodium streetlamps (static scenery)
+    const lampFlicker = 0.92 + Math.sin(this.time.now / 900) * 0.04;
+    for (const l of this.lamps) light(l.x, l.y, 210, LIGHT.streetlamp, 0.68 * lampFlicker);
     for (const l of this.fx.lights) {
       const t = l.life / l.maxLife;
       const fl = l.flicker ? 0.85 + Math.random() * 0.3 : 1;
@@ -710,8 +716,8 @@ export class GameScene extends Phaser.Scene {
       const y = s?.y ?? t.y;
       const p = prevMap.get(t.id);
       const hull = p ? lerpAngle(p.hull, t.hull, a) : t.hull;
-      glow(lc, 3, x, y, t.id === this.session.playerId ? 150 : 90, 0xb8c4ee, 0.3);
-      if (!low) cone(x + Math.cos(hull) * 18, y + Math.sin(hull) * 18, hull, 190, 0xfff0d0, 0.32);
+      glow(lc, 3, x, y, t.id === this.session.playerId ? 150 : 90, LIGHT.selfGlow, 0.3);
+      if (!low) cone(x + Math.cos(hull) * 18, y + Math.sin(hull) * 18, hull, 190, LIGHT.headlight, 0.32);
       if (t.phase === 'charging') light(x + Math.cos(t.turret) * 30, y + Math.sin(t.turret) * 30, 40 + 80 * t.charge, t.team === 0 ? 0x9fe8ff : 0xffa060, 0.45 + 0.5 * t.charge);
     }
     for (const p of cur.projectiles) light(p.x, p.y, 50 + 50 * p.charge, p.team === cur.team ? 0xbfefff : 0xff7050, 0.75);
@@ -728,7 +734,7 @@ export class GameScene extends Phaser.Scene {
     const sc = 4;
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, F.w, F.h);
-    ctx.fillStyle = 'rgba(6,9,16,0.5)';
+    ctx.fillStyle = LIGHT.fog;
     ctx.fillRect(0, 0, F.w, F.h);
     ctx.globalCompositeOperation = 'destination-out';
     const map = this.session.map;

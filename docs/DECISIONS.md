@@ -23,6 +23,8 @@ they conflict. Everything else follows the spec unless listed here.
 | D15 | **Team identity is not colour-only.** Ironveil (blue) has an angular chevron hull and a round turret. Rustguard (orange) has a boxy skirted hull, bar markings and a hexagonal turret. On the minimap, friends are circles and enemies are squares. | Accessibility requirement. |
 | D16 | Assets are **100% procedural** (canvas-drawn sprites, synthesised WebAudio). The only external resource is the Rajdhani web font (SIL OFL), with system fallback. | No licensing exposure. See ASSETS.md. |
 
+| D17 | **Cold War Berlin palette** (`src/client/palette.ts`): moss-green ground, khaki cobbles, steel blue vs brick teams and the dark green UI from the Sol 6.1 build, plus pale concrete wall slabs with pipe caps, faded graffiti, an overcast ambient and sodium streetlamps. | Owner request. Lamps are static scenery lights and reveal nothing. Team colours stay paired with shape differences, and enemy shells keep their hot red-orange so incoming fire stays readable. |
+
 ## Tuning changes from the spec
 
 | Value | Spec | Now | Reason |

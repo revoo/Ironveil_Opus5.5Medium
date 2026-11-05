@@ -2,11 +2,9 @@
 import Phaser from 'phaser';
 import { Terrain, tileAt, type GameMap } from '../sim/map';
 import { Rng } from '../sim/rng';
+import { CANOPY, GROUND, MINIMAP, TEAM, WALL } from './palette';
 
-export const TEAM_COLORS = [
-  { body: '#3f8fb5', dark: '#1f4f68', light: '#8fd6f2', accent: '#d8f6ff', hex: 0x57b6e0, name: 'Ironveil' },
-  { body: '#c25a32', dark: '#6e2c14', light: '#f0a070', accent: '#ffe1c0', hex: 0xe8703f, name: 'Rustguard' },
-] as const;
+export const TEAM_COLORS = TEAM;
 
 const S = 2; // supersampling for crisp sprites at camera zoom 2
 
@@ -307,6 +305,28 @@ function themeAt(map: GameMap, x: number, y: number): string {
 }
 
 /** Ground (grass/road/mud/brush floor), wall shadows and wall blocks baked into one canvas. */
+/** Streetlamp positions: kerbside along roads, spaced out. Purely decorative and static. */
+export function streetLamps(map: GameMap): { x: number; y: number }[] {
+  const ts = map.tile;
+  const out: { x: number; y: number }[] = [];
+  const open = (c: number, r: number) => {
+    const t = tileAt(map, c, r);
+    return t === Terrain.Grass || t === Terrain.Mud;
+  };
+  for (let row = 1; row < map.rows - 1; row++) {
+    for (let col = 1; col < map.cols - 1; col++) {
+      if (tileAt(map, col, row) !== Terrain.Road || (col * 7 + row * 3) % 5 !== 0) continue;
+      for (const [dc, dr] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
+        if (!open(col + dc, row + dr)) continue;
+        const p = { x: col * ts + 16 + dc * 20, y: row * ts + 16 + dr * 20 };
+        if (out.every((q) => Math.hypot(q.x - p.x, q.y - p.y) > 260)) out.push(p);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: HTMLCanvasElement; mini: HTMLCanvasElement } {
   const W = map.width;
   const H = map.height;
@@ -346,33 +366,38 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
       let B = 0;
       switch (t) {
         case Terrain.Road: {
-          const v = 78 + n * 22 + fine * 60;
-          R = v;
-          G = v - 2;
-          B = v - 6;
+          const c = GROUND.road;
+          const v = n + fine * 2;
+          R = c.base[0] + c.vary[0] * v;
+          G = c.base[1] + c.vary[1] * v;
+          B = c.base[2] + c.vary[2] * v;
           break;
         }
         case Terrain.Mud: {
+          const c = GROUND.mud;
           const wet = n > 0.62 ? 1 : 0;
-          R = 74 + n * 26 - wet * 18;
-          G = 54 + n * 18 - wet * 12;
-          B = 34 + n * 10 - wet * 4;
+          R = c.base[0] + c.vary[0] * n - wet * 16;
+          G = c.base[1] + c.vary[1] * n - wet * 11;
+          B = c.base[2] + c.vary[2] * n - wet * 4;
           break;
         }
-        case Terrain.Brush:
-          R = 38 + n * 16;
-          G = 64 + n * 22;
-          B = 32 + n * 10;
+        case Terrain.Brush: {
+          const c = GROUND.brush;
+          R = c.base[0] + c.vary[0] * n;
+          G = c.base[1] + c.vary[1] * n;
+          B = c.base[2] + c.vary[2] * n;
           break;
+        }
         case Terrain.Wall:
           R = 50;
           G = 52;
           B = 54;
           break;
         default: {
-          R = 70 + n * 26 + fine * 40;
-          G = 98 + n * 34 + fine * 40;
-          B = 52 + n * 14;
+          const c = GROUND.grass;
+          R = c.base[0] + c.vary[0] * n + fine * 30;
+          G = c.base[1] + c.vary[1] * n + fine * 34;
+          B = c.base[2] + c.vary[2] * n + fine * 18;
         }
       }
       const i = (y * W + x) * 4;
@@ -396,6 +421,10 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
         if (tileAt(map, col, row + 1) !== Terrain.Road) g.fillRect(x, y + ts - 3, ts, 3);
         if (tileAt(map, col - 1, row) !== Terrain.Road) g.fillRect(x, y, 3, ts);
         if (tileAt(map, col + 1, row) !== Terrain.Road) g.fillRect(x + ts - 3, y, 3, ts);
+        // worn cobble setts
+        g.fillStyle = 'rgba(30,28,22,0.16)';
+        for (let cy = 0; cy < ts; cy += 8) for (let cx = (cy / 8) % 2 ? 4 : 0; cx < ts; cx += 8) g.fillRect(x + cx, y + cy, 7, 1);
+        for (let cy = 0; cy < ts; cy += 8) for (let cx = (cy / 8) % 2 ? 0 : 4; cx < ts; cx += 8) g.fillRect(x + cx, y + cy, 1, 7);
         if (r.chance(0.12)) {
           g.fillStyle = 'rgba(20,20,20,0.25)';
           g.beginPath();
@@ -405,7 +434,7 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
       } else if (t === Terrain.Grass) {
         // grass tufts and pebbles
         for (let k = 0; k < 4; k++) {
-          g.strokeStyle = r.chance(0.5) ? 'rgba(140,170,90,0.35)' : 'rgba(40,60,30,0.35)';
+          g.strokeStyle = r.chance(0.5) ? 'rgba(120,145,96,0.32)' : 'rgba(20,34,26,0.4)';
           g.lineWidth = 1;
           const gx = x + r.next() * ts;
           const gy = y + r.next() * ts;
@@ -439,7 +468,8 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
     for (let col = 0; col < map.cols; col++)
       if (tileAt(map, col, row) === Terrain.Wall) g.fillRect(col * ts + 16, row * ts + 20, ts, ts);
 
-  // Wall blocks: top face + south face, themed by nearest landmark
+  // Wall blocks: poured-concrete Berlin-wall slabs (pipe caps, slab seams, faded graffiti),
+  // warehouse roofs at Depot/Foundry, weathered stone at the bridges.
   for (let row = 0; row < map.rows; row++) {
     for (let col = 0; col < map.cols; col++) {
       if (tileAt(map, col, row) !== Terrain.Wall) continue;
@@ -447,48 +477,73 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
       const y = row * ts;
       const theme = themeAt(map, x, y);
       const border = col === 0 || row === 0 || col === map.cols - 1 || row === map.rows - 1;
-      let top = '#6d7074';
-      let side = '#3c3e41';
-      if (theme === 'Depot' || theme === 'Foundry') {
-        top = '#7a6650';
-        side = '#463626';
-      } else if (theme === 'Radio Tower') {
-        top = '#8a8e93';
-        side = '#4a4d52';
-      } else if (theme === 'Broken Bridge' || theme === 'Quarry Cut') {
-        top = '#857a6a';
-        side = '#4c4438';
+      const roof = theme === 'Depot' || theme === 'Foundry';
+      const stone = theme === 'Broken Bridge' || theme === 'Quarry Cut';
+      let top: string = WALL.concreteTop;
+      let side: string = WALL.concreteSide;
+      if (roof) {
+        top = WALL.roofTop;
+        side = WALL.roofSide;
+      } else if (stone) {
+        top = WALL.stoneTop;
+        side = WALL.stoneSide;
       } else if (border) {
-        top = '#4f5a4a';
-        side = '#2c3329';
+        top = WALL.borderTop;
+        side = WALL.borderSide;
       }
       const southOpen = tileAt(map, col, row + 1) !== Terrain.Wall;
+      const northOpen = tileAt(map, col, row - 1) !== Terrain.Wall;
+      const westOpen = tileAt(map, col - 1, row) !== Terrain.Wall;
+      const eastOpen = tileAt(map, col + 1, row) !== Terrain.Wall;
+      const topH = southOpen ? ts - 9 : ts;
       g.fillStyle = side;
       g.fillRect(x, y, ts, ts);
       g.fillStyle = top;
-      g.fillRect(x, y, ts, southOpen ? ts - 8 : ts);
-      // bevel/highlights where edges are exposed
-      g.fillStyle = 'rgba(255,255,255,0.12)';
-      if (tileAt(map, col, row - 1) !== Terrain.Wall) g.fillRect(x, y, ts, 2);
-      if (tileAt(map, col - 1, row) !== Terrain.Wall) g.fillRect(x, y, 2, southOpen ? ts - 8 : ts);
-      g.fillStyle = 'rgba(0,0,0,0.18)';
-      if (tileAt(map, col + 1, row) !== Terrain.Wall) g.fillRect(x + ts - 2, y, 2, ts);
-      // texture
-      if (theme === 'Depot' || theme === 'Foundry') {
-        g.fillStyle = 'rgba(0,0,0,0.14)';
-        for (let k = 3; k < ts - 8; k += 5) g.fillRect(x, y + k, ts, 2); // corrugated roof
-      } else if (border) {
-        g.fillStyle = 'rgba(60,90,50,0.5)';
-        for (let k = 0; k < 3; k++) g.fillRect(x + r.next() * ts, y + r.next() * (ts - 8), 3, 3);
-      } else {
-        g.strokeStyle = 'rgba(0,0,0,0.18)';
-        g.lineWidth = 1;
-        g.beginPath();
-        const cx = x + r.next() * ts;
-        g.moveTo(cx, y + 2);
-        g.lineTo(cx + (r.next() - 0.5) * 10, y + ts - 10);
-        g.stroke();
+      g.fillRect(x, y, ts, topH);
+      if (roof) {
+        g.fillStyle = 'rgba(0,0,0,0.18)';
+        for (let k = 3; k < topH; k += 5) g.fillRect(x, y + k, ts, 2); // corrugated sheet
+        if (r.chance(0.35)) {
+          g.fillStyle = WALL.rust;
+          g.fillRect(x + r.next() * 20, y + 2, 4 + r.next() * 8, topH - 4);
+        }
+      } else if (!stone && !border) {
+        // pale concrete with mottling, slab seams every 24 px and the rounded pipe cap
+        for (let k = 0; k < 5; k++) {
+          g.fillStyle = r.chance(0.5) ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+          g.fillRect(x + r.next() * ts, y + r.next() * topH, 3 + r.next() * 6, 2 + r.next() * 5);
+        }
+        g.fillStyle = WALL.seam;
+        const runsVertically = !northOpen || !southOpen;
+        if (!runsVertically) {
+          for (let sx = 24 - ((col * ts) % 24); sx < ts; sx += 24) g.fillRect(x + sx, y, 1, topH);
+        } else {
+          for (let sy = 24 - ((row * ts) % 24); sy < topH; sy += 24) g.fillRect(x, y + sy, ts, 1);
+        }
+        g.fillStyle = WALL.pipeCap;
+        if (northOpen) g.fillRect(x, y, ts, 4);
+        if (westOpen) g.fillRect(x, y, 4, topH);
+        g.fillStyle = 'rgba(255,255,255,0.25)';
+        if (northOpen) g.fillRect(x, y + 1, ts, 1);
+        // faded graffiti on the exposed south face
+        if (southOpen && r.chance(0.45)) {
+          g.lineWidth = 1.6;
+          for (let k = 0; k < 3; k++) {
+            g.strokeStyle = WALL.graffiti[Math.floor(r.next() * WALL.graffiti.length)]!;
+            g.beginPath();
+            let gx = x + 2 + r.next() * 6;
+            const gy = y + topH + 2 + r.next() * 4;
+            g.moveTo(gx, gy);
+            for (let q = 0; q < 4; q++) {
+              gx += 3 + r.next() * 5;
+              g.quadraticCurveTo(gx - 2, gy - 3 + r.next() * 6, gx, gy + (r.next() - 0.5) * 4);
+            }
+            g.stroke();
+          }
+        }
       }
+      g.fillStyle = 'rgba(0,0,0,0.2)';
+      if (eastOpen) g.fillRect(x + ts - 2, y, 2, ts);
     }
   }
 
@@ -517,6 +572,20 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
     g.fill();
   }
 
+  // Streetlamp posts (lights are added at runtime)
+  for (const l of streetLamps(map)) {
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.beginPath();
+    g.ellipse(l.x + 5, l.y + 6, 6, 3, 0.5, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#2a2e2b';
+    g.fillRect(l.x - 2, l.y - 2, 4, 4);
+    g.fillStyle = '#ffd59a';
+    g.beginPath();
+    g.arc(l.x, l.y, 1.8, 0, Math.PI * 2);
+    g.fill();
+  }
+
   // Canopy (drawn above tanks): leafy clumps over brush tiles, spilling slightly outside.
   const [canopy, cg] = canvas(W, H);
   for (let row = 0; row < map.rows; row++) {
@@ -530,9 +599,9 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
         const rad = 6 + r.next() * 9;
         const shade = Math.floor(r.next() * 40);
         const gr = cg.createRadialGradient(px - 2, py - 2, 1, px, py, rad);
-        gr.addColorStop(0, `rgba(${70 + shade},${120 + shade},${50 + shade / 2},0.95)`);
-        gr.addColorStop(0.8, `rgba(${30 + shade / 2},${70 + shade / 2},${30},0.9)`);
-        gr.addColorStop(1, 'rgba(20,40,20,0)');
+        gr.addColorStop(0, `rgba(${CANOPY.light[0] + shade},${CANOPY.light[1] + shade},${CANOPY.light[2] + shade / 2},0.95)`);
+        gr.addColorStop(0.8, `rgba(${CANOPY.dark[0] + shade / 2},${CANOPY.dark[1] + shade / 2},${CANOPY.dark[2]},0.9)`);
+        gr.addColorStop(1, 'rgba(16,30,22,0)');
         cg.fillStyle = gr;
         cg.beginPath();
         cg.arc(px, py, rad, 0, Math.PI * 2);
@@ -546,11 +615,11 @@ export function bakeTerrain(map: GameMap): { ground: HTMLCanvasElement; canopy: 
   const mh = Math.ceil(H / 8);
   const [mini, mg] = canvas(mw, mh);
   const colors: Record<number, string> = {
-    [Terrain.Grass]: '#3d5a32',
-    [Terrain.Road]: '#5c5c5c',
-    [Terrain.Mud]: '#5a4430',
-    [Terrain.Brush]: '#2c4a24',
-    [Terrain.Wall]: '#b8bcc2',
+    [Terrain.Grass]: MINIMAP.grass,
+    [Terrain.Road]: MINIMAP.road,
+    [Terrain.Mud]: MINIMAP.mud,
+    [Terrain.Brush]: MINIMAP.brush,
+    [Terrain.Wall]: MINIMAP.wall,
   };
   for (let row = 0; row < map.rows; row++)
     for (let col = 0; col < map.cols; col++) {

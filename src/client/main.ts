@@ -22,7 +22,7 @@ const game = new Phaser.Game({
   parent: 'game',
   width: 1920,
   height: 1080,
-  backgroundColor: '#07090e',
+  backgroundColor: '#0c1310',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   render: { antialias: true, powerPreference: 'high-performance' },
   fps: { target: 240, smoothStep: false },
