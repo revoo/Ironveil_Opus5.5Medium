@@ -172,6 +172,12 @@ export class MissionSession implements PlayableSession {
     this.start(this.lastCheckpoint);
   }
 
+  /** Resume from a saved checkpoint (e.g. after the client rebuilt its scene). */
+  loadCheckpoint(cp: Checkpoint): void {
+    this.lastCheckpoint = structuredClone(cp);
+    this.start(this.lastCheckpoint);
+  }
+
   restartMission(): void {
     this.lastCheckpoint = null;
     this.start(null);

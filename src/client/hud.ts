@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import type { Observation, TankView } from '../sim/observation';
 import type { GameMap } from '../sim/map';
 import type { Vec } from '../sim/math';
-import type { LocalSession } from '../game/session';
+import type { PlayableSession } from '../game/playable';
 import type { Settings } from './settings';
 import { codeLabel } from './settings';
 import { TUNING } from '../sim/tuning';
@@ -13,7 +13,9 @@ import { TEAM, UI } from './palette';
 export interface HudModel {
   obs: Observation | null;
   map: GameMap | null;
-  session: LocalSession | null;
+  session: PlayableSession | null;
+  /** Mission mode: no score bar or respawns; objectives/choices are drawn by the DOM overlay. */
+  mission: boolean;
   view: { x: number; y: number; w: number; h: number };
   aimWorld: Vec;
   selfWorld: Vec | null;
@@ -36,6 +38,7 @@ export function newHudModel(): HudModel {
     obs: null,
     map: null,
     session: null,
+    mission: false,
     view: { x: 0, y: 0, w: 960, h: 540 },
     aimWorld: { x: 0, y: 0 },
     selfWorld: null,
@@ -174,7 +177,7 @@ export class HudScene extends Phaser.Scene {
     const [s0, s1] = obs.match.scores;
     const mine = obs.team;
     const tr = Math.max(0, obs.match.timeRemaining);
-    if (!training) {
+    if (!training && !m.mission) {
       g.fillStyle(UI.panel, 0.62).fillRoundedRect(960 - 230, 14, 460, 74, 12);
       this.text('s0', 960 - 70, 50, String(mine === 0 ? s0 : s1), 46, TEAMC[mine]!, [1, 0.5], '700');
       this.text('s1', 960 + 70, 50, String(mine === 0 ? s1 : s0), 46, TEAMC[1 - mine]!, [0, 0.5], '700');
@@ -212,11 +215,14 @@ export class HudScene extends Phaser.Scene {
 
     // ---- radio (allied bot callouts)
     if (this.settings.showRadio && m.session) {
-      const lines = m.session.radio.filter((r) => obs.tick - r.tick < 30 * 7).slice(-4);
+      const keep = m.mission ? 9 : 7;
+      const lines = m.session.radio.filter((r) => obs.tick - r.tick < 30 * keep).slice(m.mission ? -5 : -4);
       lines.forEach((r, i) => {
         const age = (obs.tick - r.tick) / 30;
-        const alpha = age > 6 ? 1 - (age - 6) : 1;
-        this.text(`radio${i}`, 28, 460 + i * 30, `${r.from}: ${r.text}`, 20, '#a8e6c8', [0, 0.5]).setAlpha(alpha);
+        const alpha = age > keep - 1 ? 1 - (age - (keep - 1)) : 1;
+        const enemy = r.from.endsWith('(enemy)');
+        const text = enemy ? `⟂ ${r.from.replace(' (enemy)', '')}: ${r.text}` : `${r.from}: ${r.text}`;
+        this.text(`radio${i}`, 28, 460 + i * 30, text, m.mission && !enemy ? 22 : 20, enemy ? '#ffb38f' : '#a8e6c8', [0, 0.5]).setAlpha(alpha);
       });
     }
 
@@ -231,7 +237,7 @@ export class HudScene extends Phaser.Scene {
       const left = me.respawnTick >= 0 ? Math.max(0, (me.respawnTick - obs.tick) / 30) : 0;
       g.fillStyle(0x000000, 0.35).fillRect(0, 0, 1920, 1080);
       this.text('dead', 960, 500, 'DESTROYED', 72, '#ff8a6a', [0.5, 0.5], '700');
-      if (obs.match.phase !== 'ended') this.text('respawn', 960, 570, `Redeploying in ${left.toFixed(1)}s`, 28, '#e0e6ee', [0.5, 0.5]);
+      if (obs.match.phase !== 'ended' && !m.mission) this.text('respawn', 960, 570, `Redeploying in ${left.toFixed(1)}s`, 28, '#e0e6ee', [0.5, 0.5]);
     }
 
     // ---- intro hint
@@ -249,7 +255,7 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
-  private drawTraining(tr: NonNullable<LocalSession['training']>): void {
+  private drawTraining(tr: NonNullable<PlayableSession['training']>): void {
     const g = this.g;
     const b = this.settings.bindings;
     const keys = (s: string) => s.replace(/{(fire|cancel|smoke|silent)}/g, (_, a: keyof typeof b) => codeLabel(b[a][0]!));

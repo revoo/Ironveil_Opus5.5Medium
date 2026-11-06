@@ -6,8 +6,10 @@ import { InputManager } from './input';
 import { AudioEngine } from './audio';
 import { ACTION_LABELS, codeLabel, DEFAULT_BINDINGS, loadSettings, saveSettings, type Action, type Settings } from './settings';
 import type { Observation } from '../sim/observation';
-import type { LocalSession } from '../game/session';
+import type { PlayableSession } from '../game/playable';
 import type { Difficulty } from '../ai/personality';
+import { MissionSession, type Checkpoint } from '../game/mission/session';
+import { MISSIONS } from '../content/missions';
 
 const settings: Settings = loadSettings();
 const input = new InputManager(settings);
@@ -100,6 +102,7 @@ function mainMenu(): void {
       <div class="actions">
         <button class="primary" id="deploy">Deploy</button>
         <button id="train">Training</button>
+        <button id="mission">Grey-box mission</button>
         <button id="how">How to play</button>
         <button id="settings">Settings</button>
       </div>
@@ -116,6 +119,11 @@ function mainMenu(): void {
   d.querySelector('#train')!.addEventListener('click', () => {
     saveSettings(settings);
     startMatch(true);
+  });
+  d.querySelector('#mission')!.addEventListener('click', () => {
+    settings.playerName = ((d.querySelector('#name') as HTMLInputElement).value.trim() || 'You').slice(0, 14);
+    saveSettings(settings);
+    missionBriefing(MISSIONS[0]!.mission.id);
   });
   d.querySelector('#how')!.addEventListener('click', () => howTo(mainMenu));
   d.querySelector('#settings')!.addEventListener('click', () => settingsScreen(mainMenu));
@@ -217,7 +225,7 @@ function openPause(): void {
       <h2>Paused</h2>
       <div class="actions" style="flex-direction:column">
         <button class="primary" id="resume">Resume</button>
-        <button id="restart">Restart match</button>
+        ${currentMission ? '<button id="retry">Retry from checkpoint</button><button id="restart">Restart mission</button>' : '<button id="restart">Restart match</button>'}
         <button id="set">Settings</button>
         <button id="how">How to play</button>
         <button id="quit">Quit to menu</button>
@@ -228,7 +236,14 @@ function openPause(): void {
   d.querySelector('#restart')!.addEventListener('click', () => {
     clearUi();
     paused = false;
-    startMatch();
+    if (currentMission) startMission(currentMission);
+    else startMatch();
+  });
+  d.querySelector('#retry')?.addEventListener('click', () => {
+    clearUi();
+    paused = false;
+    const ms = gameScene()?.session;
+    startMission(currentMission!, ms instanceof MissionSession ? ms.lastCheckpoint ?? undefined : undefined);
   });
   d.querySelector('#set')!.addEventListener('click', () => settingsScreen(openPause));
   d.querySelector('#how')!.addEventListener('click', () => howTo(openPause));
@@ -243,6 +258,7 @@ function closePause(): void {
 
 function quitToMenu(): void {
   paused = false;
+  currentMission = null;
   game.scene.stop('hud');
   game.scene.stop('game');
   mainMenu();
@@ -251,6 +267,7 @@ function quitToMenu(): void {
 let lastTraining = false;
 function startMatch(training = lastTraining): void {
   lastTraining = training;
+  currentMission = null;
   audio.unlock();
   hud = newHudModel();
   (window as unknown as { __ironveil: { hud: () => HudModel } }).__ironveil.hud = () => hud;
@@ -271,8 +288,9 @@ function startMatch(training = lastTraining): void {
   game.scene.start('hud', { model: hud, settings });
 }
 
-function showResults(obs: Observation, session: LocalSession): void {
+function showResults(obs: Observation, session: PlayableSession): void {
   inMatch = false;
+  if (session instanceof MissionSession) return missionResults(session);
   const w = obs.match.winner;
   const title = w === 'draw' ? 'Draw' : w === obs.team ? 'Victory' : 'Defeat';
   const me = session.world.tank(session.playerId);
@@ -293,6 +311,125 @@ function showResults(obs: Observation, session: LocalSession): void {
   d.querySelector('#again')!.addEventListener('click', () => startMatch(false));
   d.querySelector('#menu')!.addEventListener('click', quitToMenu);
 }
+
+// --------------------------------------------------------------- missions
+let currentMission: string | null = null;
+
+function missionBriefing(id: string): void {
+  const m = MISSIONS.find((x) => x.mission.id === id)!.mission;
+  const d = screen(`
+    <div class="card">
+      <h2>${escapeHtml(m.title)}</h2>
+      <p class="brief">${escapeHtml(m.briefing ?? '')}</p>
+      <ul class="tips">
+        <li>Enemies have a <b>suspicion meter</b>: being seen fills it, faster up close. Firing or getting within point-blank range fills it at once. Break line of sight and it drains.</li>
+        <li>Your crew talks on the radio in real time. When a <b>decision</b> comes up, press <b>1</b>, <b>2</b> or <b>3</b> before the timer runs out, or the commander decides.</li>
+        <li>If you're destroyed you can retry from the last <b>checkpoint</b>.</li>
+      </ul>
+      <div class="actions"><button class="primary" id="go">Begin</button><button id="back">Back</button></div>
+    </div>`);
+  d.querySelector('#go')!.addEventListener('click', () => startMission(id));
+  d.querySelector('#back')!.addEventListener('click', mainMenu);
+}
+
+function startMission(id: string, checkpoint?: Checkpoint): void {
+  audio.unlock();
+  hud = newHudModel();
+  (window as unknown as { __ironveil: { hud: () => HudModel } }).__ironveil.hud = () => hud;
+  clearUi();
+  inMatch = true;
+  paused = false;
+  currentMission = id;
+  const data: GameSceneData = {
+    cfg: { teamSize: 1, difficulty: settings.difficulty, playerName: settings.playerName },
+    settings,
+    input,
+    audio,
+    hud,
+    onEnd: showResults,
+    mission: checkpoint ? { id, checkpoint } : { id },
+  };
+  game.scene.stop('hud');
+  game.scene.stop('game');
+  game.scene.start('game', data);
+  game.scene.start('hud', { model: hud, settings });
+}
+
+function missionResults(s: MissionSession): void {
+  const o = s.outcome;
+  const ok = o?.result === 'success';
+  const objectives = s
+    .objectives()
+    .map((x) => `<li class="obj ${x.state}">${x.state === 'complete' ? '✔' : x.state === 'failed' ? '✖' : '•'} ${escapeHtml(x.text)}</li>`)
+    .join('');
+  const d = screen(
+    `<div class="card">
+      <h2>${ok ? 'Mission complete' : 'Mission failed'}</h2>
+      <p class="brief">${escapeHtml(o?.text ?? '')}</p>
+      <ul class="objlist">${objectives}</ul>
+      <div class="actions">
+        ${ok ? '' : '<button class="primary" id="retry">Retry from checkpoint</button>'}
+        <button ${ok ? 'class="primary"' : ''} id="restart">Restart mission</button>
+        <button id="menu">Menu</button>
+      </div>
+    </div>`,
+    true,
+  );
+  const cp = s.lastCheckpoint ?? undefined;
+  d.querySelector('#retry')?.addEventListener('click', () => startMission(s.def.id, cp));
+  d.querySelector('#restart')!.addEventListener('click', () => startMission(s.def.id));
+  d.querySelector('#menu')!.addEventListener('click', quitToMenu);
+}
+
+/** Objectives, detection meter, notices and the real-time choice prompt, drawn over the game. */
+const missionEl = document.createElement('div');
+missionEl.id = 'mission-hud';
+document.body.appendChild(missionEl);
+let missionHtml = '';
+function renderMissionHud(): void {
+  requestAnimationFrame(renderMissionHud);
+  const ms = gameScene()?.session;
+  if (!(ms instanceof MissionSession) || !inMatch || ms.outcome) {
+    if (missionHtml) missionEl.innerHTML = missionHtml = '';
+    return;
+  }
+  const tick = ms.world.tick;
+  const det = ms.detection();
+  const detLabel = det >= 1 ? 'SPOTTED' : det > 0.6 ? 'ALERT' : det > 0.05 ? 'SUSPICIOUS' : 'HIDDEN';
+  const obj = ms
+    .objectives()
+    .map((x) => `<li class="obj ${x.state}">${x.state === 'complete' ? '✔' : x.state === 'failed' ? '✖' : '▸'} ${escapeHtml(x.text)}</li>`)
+    .join('');
+  const notes = ms.notices
+    .filter((n) => tick - n.tick < 30 * 4)
+    .map((n) => `<div class="notice-pop">${escapeHtml(n.text)}</div>`)
+    .join('');
+  let choice = '';
+  if (ms.choice) {
+    const c = ms.choice;
+    const left = Math.max(0, (c.expiresTick - tick) / (c.expiresTick - c.startedTick));
+    choice = `<div class="choice">
+      <div class="who">${escapeHtml(c.from ?? '')}</div>
+      <div class="prompt">${escapeHtml(c.prompt)}</div>
+      ${c.options.map((o, i) => `<div class="opt${i === c.defaultIndex ? ' def' : ''}"><b>${i + 1}</b> ${escapeHtml(o)}</div>`).join('')}
+      <div class="timer"><span style="width:${(left * 100).toFixed(1)}%"></span></div>
+    </div>`;
+  }
+  const html = `<div class="objectives"><div class="title">${escapeHtml(ms.def.title)}</div><ul>${obj}</ul></div>
+    <div class="detect ${detLabel.toLowerCase()}"><span>${detLabel}</span><div class="bar"><i style="width:${Math.round(det * 100)}%"></i></div></div>
+    <div class="notices">${notes}</div>${choice}`;
+  if (html !== missionHtml) missionEl.innerHTML = missionHtml = html;
+}
+requestAnimationFrame(renderMissionHud);
+window.addEventListener('keydown', (e) => {
+  const ms = gameScene()?.session;
+  if (!(ms instanceof MissionSession) || !ms.choice || paused) return;
+  const n = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code);
+  if (n >= 0) {
+    ms.choose(n % 3);
+    audio.click();
+  }
+});
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
