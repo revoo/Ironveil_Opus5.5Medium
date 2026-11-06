@@ -30,7 +30,15 @@ export interface TankSpec {
   team: Team;
   isBot: boolean;
   pos?: Vec;
+  /** Initial hull/turret facing in radians (default: toward the map centre line). */
+  facing?: number;
 }
+
+/**
+ * `deathmatch`: respawns, kill target, timer, sudden death (the original mode).
+ * `mission`: no respawns and no automatic end; the mission layer decides the outcome via `endMission`.
+ */
+export type WorldRules = 'deathmatch' | 'mission';
 
 export interface WorldConfig {
   map: GameMap;
@@ -41,6 +49,7 @@ export interface WorldConfig {
   killTarget?: number;
   /** Seconds. */
   timeLimit?: number;
+  rules?: WorldRules;
 }
 
 interface PendingHit {
@@ -58,6 +67,7 @@ const C = TUNING.cannon;
 export class World {
   readonly map: GameMap;
   readonly rng: Rng;
+  readonly rules: WorldRules;
   tick = 0;
   tanks: Tank[] = [];
   projectiles: Projectile[] = [];
@@ -73,10 +83,13 @@ export class World {
   private countdownTicks: number;
   private initialPos = new Map<number, Vec>();
   private pendingHits: PendingHit[] = [];
+  /** Events raised between steps (e.g. mid-mission spawns), delivered with the next step. */
+  private queued: WorldEvent[] = [];
 
   constructor(cfg: WorldConfig) {
     this.map = cfg.map;
     this.rng = new Rng(cfg.seed);
+    this.rules = cfg.rules ?? 'deathmatch';
     this.tracks = new TrackStore(cfg.seed);
     this.countdownTicks = ticks(cfg.countdown ?? TUNING.match.countdown);
     this.match = {
@@ -89,14 +102,32 @@ export class World {
       winner: null,
     };
     const perTeam = [0, 0];
-    cfg.tanks.forEach((s, id) => {
+    cfg.tanks.forEach((s) => {
       const spawns = this.map.spawns[s.team] ?? [];
       const idx = perTeam[s.team]!++;
-      const pos = s.pos ?? spawns[idx % Math.max(1, spawns.length)] ?? { x: this.map.width / 2, y: this.map.height / 2 };
-      const t = createTank(id, s.team, s.name, pos, s.isBot);
-      this.initialPos.set(id, { x: pos.x, y: pos.y });
-      this.tanks.push(t);
+      this.addTank({ ...s, pos: s.pos ?? spawns[idx % Math.max(1, spawns.length)] ?? { x: this.map.width / 2, y: this.map.height / 2 } });
     });
+  }
+
+  /** Add a tank (at construction, or mid-mission for reinforcements). Returns its id. */
+  addTank(s: TankSpec): number {
+    const id = this.tanks.length;
+    const pos = s.pos ?? { x: this.map.width / 2, y: this.map.height / 2 };
+    const t = createTank(id, s.team, s.name, pos, s.isBot);
+    if (s.facing !== undefined) t.hull = t.turret = s.facing;
+    this.initialPos.set(id, { x: pos.x, y: pos.y });
+    this.tanks.push(t);
+    if (this.tick > 0) this.queued.push({ type: 'spawn', tank: id, pos: { ...pos } });
+    return id;
+  }
+
+  /** Mission rules: end the match with an outcome decided outside the simulation. */
+  endMission(winner: Team | 'draw'): void {
+    if (this.match.phase === 'ended') return;
+    this.match.phase = 'ended';
+    this.match.phaseStartTick = this.tick;
+    this.match.winner = winner;
+    this.queued.push({ type: 'match', phase: 'ended', winner });
   }
 
   tank(id: number): Tank {
@@ -131,7 +162,8 @@ export class World {
 
   step(inputs: Partial<Record<number, TankInput>>): void {
     const tick = this.tick;
-    this.events = [];
+    this.events = this.queued;
+    this.queued = [];
     this.sounds = [];
     const live = this.isLive;
 
@@ -400,7 +432,7 @@ export class World {
       t.alive = false;
       t.deaths++;
       resetWeapon(t.weapon);
-      t.respawnTick = tick + ticks(TUNING.match.respawn);
+      t.respawnTick = this.rules === 'mission' ? -1 : tick + ticks(TUNING.match.respawn);
       const k = this.tanks[killer];
       if (k && k.team !== t.team) {
         k.kills++;
@@ -432,6 +464,7 @@ export class World {
         }
         break;
       case 'live':
+        if (this.rules === 'mission') break;
         if (a >= m.killTarget || b >= m.killTarget) this.setPhase('ended', next, a > b ? 0 : b > a ? 1 : 'draw');
         else if (next - m.liveStartTick >= m.timeLimitTicks) {
           if (a !== b) this.setPhase('ended', next, a > b ? 0 : 1);
@@ -451,6 +484,7 @@ export class World {
   timeRemaining(): number {
     const m = this.match;
     if (m.phase === 'countdown') return (this.countdownTicks - (this.tick - m.phaseStartTick)) / TUNING.tickHz;
+    if (m.phase === 'live' && this.rules === 'mission') return 0;
     if (m.phase === 'live') return (m.timeLimitTicks - (this.tick - m.liveStartTick)) / TUNING.tickHz;
     if (m.phase === 'suddenDeath') return (ticks(TUNING.match.suddenDeath) - (this.tick - m.phaseStartTick)) / TUNING.tickHz;
     return 0;
