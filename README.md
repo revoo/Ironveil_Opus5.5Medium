@@ -7,6 +7,16 @@ cannon; brush, smoke, sound and mud tracks that make information the real weapon
 > **Status:** single-player complete and ready for the owner's playtest. Multiplayer is
 > intentionally deferred (see [docs/DECISIONS.md](docs/DECISIONS.md)).
 
+## Campaign foundation (in progress)
+
+Work toward a short narrative campaign lives on this branch:
+
+- **Missions** with objectives, triggers, real-time crew radio and choices, and checkpoints. See [docs/MISSIONS.md](docs/MISSIONS.md).
+- **Levels as data**, authored in LDtk. See [docs/LEVELS.md](docs/LEVELS.md).
+- A **simple garrison AI** with a stealth suspicion meter for ordinary units. The full tactical AI is kept for bosses.
+- A playable **grey-box mission**, *The Crossing* (main menu → Grey-box mission).
+- The crew system design proposal: [docs/CREW-PROPOSAL.md](docs/CREW-PROPOSAL.md).
+
 ## Quick start
 
 Requires Node.js 22+ (developed on 24).
