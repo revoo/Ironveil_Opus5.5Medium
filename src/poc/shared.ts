@@ -38,6 +38,17 @@ export interface Tank { x: number; y: number; vx: number; vy: number; hull: numb
 export interface Shell { x: number; y: number; vx: number; vy: number; life: number }
 export interface Flash { x: number; y: number; t: number; dur: number; big: boolean }
 export interface Smoke { x: number; y: number; t: number; seed: number }
+/** One-shot events for renderers that spawn decals/particles (cleared every update). */
+export interface SimEvent { type: 'fire' | 'impact'; x: number; y: number; dx: number; dy: number }
+/** Screen-relative movement: W moves along `f`, D along `r` (world x/y). Default is plain world axes. */
+export interface MoveBasis { fx: number; fy: number; rx: number; ry: number }
+const WORLD_BASIS: MoveBasis = { fx: 0, fy: -1, rx: 1, ry: 0 };
+const PATROL = [
+  { x: 1300, y: 520 },
+  { x: 1500, y: 540 },
+  { x: 1480, y: 820 },
+  { x: 1290, y: 800 },
+];
 
 export const SMOKE_LIFE = 8;
 
@@ -123,7 +134,9 @@ export class Sandbox {
   shells: Shell[] = [];
   flashes: Flash[] = [];
   smokes: Smoke[] = [];
+  events: SimEvent[] = [];
   time = 0;
+  private patrolIdx = 0;
   private cooldown = 0;
   private smokeCd = 0;
 
@@ -131,8 +144,9 @@ export class Sandbox {
     return [this.player, this.enemy];
   }
 
-  update(dt: number, input: Input, aimX: number, aimY: number): void {
+  update(dt: number, input: Input, aimX: number, aimY: number, basis: MoveBasis = WORLD_BASIS): void {
     this.time += dt;
+    this.events = [];
     const p = this.player;
     let ix = 0, iy = 0;
     if (input.keys.has('KeyW') || input.keys.has('ArrowUp')) iy -= 1;
@@ -140,8 +154,9 @@ export class Sandbox {
     if (input.keys.has('KeyA') || input.keys.has('ArrowLeft')) ix -= 1;
     if (input.keys.has('KeyD') || input.keys.has('ArrowRight')) ix += 1;
     const il = Math.hypot(ix, iy) || 1;
-    p.vx += (ix / il) * 900 * dt;
-    p.vy += (iy / il) * 900 * dt;
+    const mx0 = basis.rx * ix - basis.fx * iy, my0 = basis.ry * ix - basis.fy * iy;
+    p.vx += (mx0 / il) * 900 * dt;
+    p.vy += (my0 / il) * 900 * dt;
     const drag = Math.exp(-dt * (ix || iy ? 2.2 : 3.5));
     p.vx *= drag;
     p.vy *= drag;
@@ -165,8 +180,18 @@ export class Sandbox {
     p.y = Math.max(p.r, Math.min(YARD.h - p.r, p.y));
     p.turret += wrap(Math.atan2(aimY - p.y, aimX - p.x) - p.turret) * Math.min(1, dt * 10);
     p.recoil = Math.max(0, p.recoil - dt * 4);
-    // enemy turret idles around
-    this.enemy.turret = Math.PI * 0.95 + Math.sin(this.time * 0.5) * 0.6;
+    // enemy patrols a slow loop with its turret scanning
+    const e = this.enemy, wp = PATROL[this.patrolIdx];
+    const ex = wp.x - e.x, ey = wp.y - e.y, ed = Math.hypot(ex, ey);
+    if (ed < 20) this.patrolIdx = (this.patrolIdx + 1) % PATROL.length;
+    const want = Math.atan2(ey, ex), turn = wrap(want - e.hull);
+    e.hull += Math.sign(turn) * Math.min(Math.abs(turn), dt * 1.2);
+    const go = Math.max(0, Math.cos(turn)) * 55;
+    e.vx = Math.cos(e.hull) * go;
+    e.vy = Math.sin(e.hull) * go;
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    e.turret = e.hull + Math.sin(this.time * 0.5) * 0.9;
 
     this.cooldown -= dt;
     this.smokeCd -= dt;
@@ -176,6 +201,7 @@ export class Sandbox {
       const mx = p.x + c * 40, my = p.y + s * 40;
       this.shells.push({ x: mx, y: my, vx: c * 1100, vy: s * 1100, life: 1.2 });
       this.flashes.push({ x: mx, y: my, t: 0, dur: 0.12, big: false });
+      this.events.push({ type: 'fire', x: mx, y: my, dx: c, dy: s });
       p.recoil = 1;
     }
     if (input.take('KeyQ') && this.smokeCd <= 0) {
@@ -191,7 +217,9 @@ export class Sandbox {
         const hitTank = Math.hypot(sh.x - this.enemy.x, sh.y - this.enemy.y) < this.enemy.r;
         if (hitTank || RECTS.some((b) => inRect(sh.x, sh.y, b)) || sh.x < 0 || sh.y < 0 || sh.x > YARD.w || sh.y > YARD.h) {
           sh.life = 0;
-          this.flashes.push({ x: sh.x - sh.vx * 0.006, y: sh.y - sh.vy * 0.006, t: 0, dur: 0.35, big: true });
+          const ix2 = sh.x - sh.vx * 0.006, iy2 = sh.y - sh.vy * 0.006, sl = Math.hypot(sh.vx, sh.vy);
+          this.flashes.push({ x: ix2, y: iy2, t: 0, dur: 0.35, big: true });
+          this.events.push({ type: 'impact', x: ix2, y: iy2, dx: sh.vx / sl, dy: sh.vy / sl });
         }
       }
       sh.life -= dt;
