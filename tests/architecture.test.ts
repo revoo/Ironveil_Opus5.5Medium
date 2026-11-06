@@ -11,7 +11,7 @@ function files(dir: string): string[] {
 }
 
 describe('architecture boundaries', () => {
-  for (const pkg of ['src/sim', 'src/ai', 'src/game']) {
+  for (const pkg of ['src/sim', 'src/ai', 'src/game', 'src/level']) {
     it(`${pkg} imports no presentation, DOM or client code`, () => {
       for (const f of files(pkg)) {
         const src = readFileSync(f, 'utf8');

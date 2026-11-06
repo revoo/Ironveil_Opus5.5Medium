@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "soak": "tsx tools/soak.ts",
-    "map:preview": "tsx tools/map-preview.ts"
+    "map:preview": "tsx tools/map-preview.ts",
+    "level:import": "tsx tools/import-ldtk.ts"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
