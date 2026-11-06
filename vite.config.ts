@@ -6,6 +6,14 @@ export default defineConfig({
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        poc: 'poc/index.html',
+        poc2d: 'poc/2d.html',
+        poc3d: 'poc/3d.html',
+      },
+    },
   },
   test: {
     include: ['tests/**/*.test.ts'],
