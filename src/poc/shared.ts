@@ -219,6 +219,13 @@ export class Hud {
     this.el = document.createElement('div');
     this.el.className = 'hud';
     document.body.appendChild(this.el);
+    if (history.length > 1) {
+      const back = document.createElement('button');
+      back.className = 'back';
+      back.textContent = '← All demos';
+      back.onclick = () => history.back();
+      document.body.appendChild(back);
+    }
   }
 
   get(key: string): boolean {
@@ -280,6 +287,8 @@ canvas{display:block}
 .hud .row{display:flex;gap:6px}.hud .row b{width:28px;color:#f1d09c}.hud .row span{margin-left:auto}
 .hud .row.off{color:#7f8f80}.hud .extra{margin-top:6px;color:#87c9e8}
 .hud .hint{margin-top:8px;color:#a4b6a4;font-size:12px}
+.back{position:fixed;left:10px;bottom:10px;font:600 14px Rajdhani,system-ui,sans-serif;color:#edf4df;background:rgba(16,27,23,.82);border:1px solid #2c4236;padding:6px 12px;cursor:pointer}
+.back:hover,.back:focus-visible{border-color:#87c9e8;outline:none}
 `;
 
 export const CONTROLS_HINT = 'WASD drive · mouse aim · click fire · Q smoke';
