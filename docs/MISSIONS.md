@@ -1,0 +1,129 @@
+# Missions
+
+A mission is a JSON file in `src/content/missions/` that places **units** on a **level**
+(see [LEVELS.md](LEVELS.md)) and wires up **objectives** and **triggers**: *when this happens, do
+these things*. Register it in `src/content/missions/index.ts`.
+`src/content/missions/greybox-crossing.json` is a complete example that uses every feature once.
+
+```
+level JSON ─┐
+            ├─► MissionSession ─► World (mission rules: no respawns, outcome decided by triggers)
+mission JSON┘        │            ├─ SimpleController  (garrison units, ai: "simple")
+                     │            ├─ BotController     (boss units,     ai: "boss")
+                     │            └─ TeamObserver      (the player only sees what their tank sees)
+                     └─► MissionRunner: evaluates triggers after every tick
+```
+
+Everything is validated when the mission loads, and in the test suite: every marker, zone, path,
+unit, objective and trigger id it mentions must exist.
+
+## Units
+
+```json
+{ "id": "gate_guard_north", "name": "Gate North", "marker": "gate_north", "ai": "simple", "skill": 0.4,
+  "posture": { "patrol": "alley_patrol" } }
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | Used by triggers. `player` and `any-enemy` are reserved. |
+| `name` | Callsign in intercepted radio barks. |
+| `marker` | Spawn point. The marker's `facing` sets the starting direction. |
+| `ai` | `simple` for ordinary garrison units, `boss` for the full tactical squad AI (see [AI.md](AI.md)). |
+| `posture` | What a calm unit does: `{ "patrol": pathId }`, `{ "guard": markerId }` (stand there and scan around the marker's facing) or `{ "hold": markerId }`. Default: guard its own spawn marker. |
+| `skill` | 0–1, simple AI only. Affects aim error, target leading and how fast suspicion builds. |
+| `persona` | Boss only: a tactical persona id (`brawler`, `marksman`, `stalker`, `flanker`, `anchor`, `scrapper`). |
+
+### How the simple AI notices you
+
+Each unit has a **suspicion meter** (shown on the HUD as HIDDEN / SUSPICIOUS / ALERT / SPOTTED):
+
+- Seeing you fills it: about 2.2 s at the edge of vision (440 px), 0.6 s up close, **instantly**
+  within 130 px or if you fire. Brush and smoke apply as usual: a unit can only see what its team can see.
+- Out of sight, it drains.
+- Hearing something (engine, shot) makes a calm unit suspicious, and it turns and goes to look.
+- When the meter fills, the unit enters combat and **raises the alarm**: units within 900 px start
+  searching where you were seen. The `alarm` condition becomes true.
+- After losing you, a unit searches for about 9 s, then goes back to suspicious, then calm.
+
+All of these numbers are in `SIMPLE_TUNING` (`src/ai/simple.ts`).
+
+## Objectives
+
+```json
+{ "id": "stay_hidden", "text": "Stay undetected (optional)", "state": "hidden" }
+```
+
+States: `hidden` (not shown yet), `active`, `complete`, `failed`. Default `active`. Triggers change them.
+
+## Triggers
+
+```json
+{ "id": "past_wall", "when": { "enter": "past_wall" }, "do": [ ...actions ], "once": true }
+```
+
+Triggers are checked after every simulation tick, in file order. `once` defaults to true. A repeating
+trigger (`"once": false`) fires each time its condition *becomes* true.
+
+### Conditions
+
+| Condition | True when |
+|---|---|
+| `{ "enter": "zone" }` | the player is inside the zone. Add `"who": "unit_id"` or `"who": "any-enemy"` for others. |
+| `{ "destroyed": "unit" }` or `["a", "b"]` | all listed units are destroyed |
+| `{ "playerDestroyed": true }` | the player's tank is destroyed (the mission fails automatically anyway) |
+| `{ "alarm": true }` | any unit has raised the alarm |
+| `{ "flag": "route" }` / `{ "flag": "route", "is": "north" }` | a flag is truthy / has a value |
+| `{ "after": 30 }` | 30 s after mission start |
+| `{ "after": 5, "since": "trigger_id" }` | 5 s after that trigger fired |
+| `{ "objective": "cross", "is": "complete" }` | an objective is in that state |
+| `{ "all": [...] }`, `{ "any": [...] }`, `{ "not": {...} }` | combine conditions |
+
+### Actions
+
+| Action | Effect |
+|---|---|
+| `{ "radio": "text", "from": "Driver", "delay": 2 }` | a radio line, optionally delayed (seconds) |
+| `{ "setFlag": "route", "value": "north" }` | set a flag (default `true`) |
+| `{ "addFlag": "crew_tension", "by": 1 }` | add to a numeric flag |
+| `{ "objective": "id", "state": "complete" }` | change an objective (with an on-screen notice) |
+| `{ "spawn": unit }` or `[units]` | bring in units mid-mission |
+| `{ "order": "unit", "posture": { "patrol": "path" } }` | change a simple unit's posture |
+| `{ "alarm": true, "at": "marker_or_zone", "radius": 600 }` | raise the alarm (default: at the player, whole map) |
+| `{ "checkpoint": "marker" }` | save a checkpoint; retrying restarts the player at that marker |
+| `{ "choice": { ... } }` | a real-time decision (below) |
+| `{ "end": "success", "text": "..." }` | end the mission (`failure` too) |
+
+### Real-time choices
+
+```json
+{ "choice": { "from": "Commander", "prompt": "How do we cross?", "timeout": 15, "default": 0,
+  "options": [
+    { "text": "Quietly, through the north alley", "do": [ { "setFlag": "route", "value": "north" } ] },
+    { "text": "Straight through the gate", "do": [ { "setFlag": "route", "value": "gate" } ] } ] } }
+```
+
+The game **keeps running** while the choice is on screen. The player presses 1–3, or the default
+option is taken when the timer runs out. Options run their own actions, so a choice can set flags,
+change objectives, spawn units, and so on.
+
+## Checkpoints, and what they restore
+
+A checkpoint stores the mission's flags, objectives, which triggers have fired, which units are
+destroyed, which units were spawned, whether the alarm was up, and any choice still on screen (so
+dying can't skip a decision). On retry:
+
+- the player restarts at the checkpoint marker with full health
+- destroyed units stay destroyed, and spawned units come back
+- **surviving enemies return to their posts, calm**. This is deliberate and common in stealth
+  games, and it avoids restoring mid-fight AI state.
+- timers (`after`) keep their meaning
+
+## Writing tips
+
+- Keep crew lines short and staggered with `delay`. Five lines in one second are unreadable while
+  driving.
+- Gate story beats on **zones** rather than timers wherever you can, so players can't miss them.
+- A location-based choice can be outrun (the grey-box test autopilot reaches the depot before the
+  15 s timer runs out). If it matters, let a later trigger read the flag *or its absence*.
+- Missions are tested headlessly: see `tests/greybox.test.ts` for an autopilot playthrough.

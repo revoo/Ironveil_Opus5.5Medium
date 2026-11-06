@@ -24,6 +24,9 @@ they conflict. Everything else follows the spec unless listed here.
 | D16 | Assets are **100% procedural** (canvas-drawn sprites, synthesised WebAudio). The only external resource is the Rajdhani web font (SIL OFL), with system fallback. | No licensing exposure. See ASSETS.md. |
 
 | D17 | **Cold War Berlin palette** (`src/client/palette.ts`): moss-green ground, khaki cobbles, steel blue vs brick teams and the dark green UI from the Sol 6.1 build, plus pale concrete wall slabs with pipe caps, faded graffiti, an overcast ambient and sodium streetlamps. | Owner request. Lamps are static scenery lights and reveal nothing. Team colours stay paired with shape differences, and enemy shells keep their hot red-orange so incoming fire stays readable. |
+| D18 | **Campaign foundation (branch `campaign-foundation`).** The World gains `mission` rules: no respawns, and the outcome is decided by the mission layer. Levels become validated data authored in LDtk ([LEVELS.md](LEVELS.md)). Missions are JSON triggers, objectives, checkpoints and real-time choices ([MISSIONS.md](MISSIONS.md)). | Owner direction: a short narrative campaign. Data-driven content keeps code and writing separate, and validation plus headless playthroughs catch authoring errors. |
+| D19 | **Two AI tiers.** Ordinary units use the new `SimpleController` (postures, a suspicion meter, alert states, alarms). Boss encounters keep the full tactical `BotController`. | Owner directive: the original deathmatch AI is saved for boss battles. A predictable, readable garrison AI suits stealth better than a smart one. |
+| D20 | **Checkpoints restore mission state, not AI state.** Flags, objectives, fired triggers, destroyed and spawned units, and any open choice are restored. Surviving enemies reset calm at their posts. | Common stealth-game convention. Snapshotting mid-fight AI and physics would be large and fragile for little gain. |
 
 ## Tuning changes from the spec
 
