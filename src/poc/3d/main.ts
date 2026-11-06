@@ -17,6 +17,7 @@ import { CONTROLS_HINT, HUD_CSS, Hud, Input, Sandbox, YARD, gpuName, type MoveBa
 import { Surface, buildEnvironment, proc, procUniforms } from './materials';
 import { buildBuildings, buildDressing, buildLamps, buildTank, buildWalls, mergeStatic, rand, type TankView } from './props';
 import { Decals, Flashes, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
+import { DebugViews, VIEWS } from './debug';
 
 const style = document.createElement('style');
 style.textContent = HUD_CSS;
@@ -240,6 +241,51 @@ addEventListener('wheel', (e) => {
   zoom = Math.min(2.2, Math.max(0.55, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
 });
 
+/** Hide see-through effects (mist, cones, smoke, sprites, rain, particles) and return what was hidden. */
+function hideFx(): THREE.Object3D[] {
+  const hidden: THREE.Object3D[] = [];
+  scene.traverseVisible((o) => {
+    const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+    if ((o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints || (o as THREE.Line).isLine || (mat && !Array.isArray(mat) && mat.transparent)) hidden.push(o);
+  });
+  hidden.forEach((o) => (o.visible = false));
+  return hidden;
+}
+
+// ---------- moon shadow controls (for learning) ----------
+const SHADOW_SIZES = [256, 512, 1024, 2048, 4096, 8192].filter((n) => n <= renderer.capabilities.maxTextureSize);
+let shadowIdx = SHADOW_SIZES.indexOf(4096);
+let shadowFit = false;
+let shadowSoft = true;
+const MOON_OFFSET = moon.position.clone().sub(moon.target.position);
+const MOON_FULL = { left: -1300, right: 1300, top: 1000, bottom: -1000 };
+const debug = new DebugViews(renderer, SHADOW_SIZES[shadowIdx]);
+function applyShadowSize(): void {
+  const n = SHADOW_SIZES[shadowIdx];
+  moon.shadow.mapSize.set(n, n);
+  moon.shadow.map?.dispose();
+  (moon.shadow as { map: THREE.WebGLRenderTarget | null }).map = null;
+  debug.resizeShadow(n);
+}
+/** Either cover the whole yard (default) or only what the camera can see, snapped to whole texels. */
+function updateMoonShadow(): void {
+  const cam = moon.shadow.camera;
+  moon.shadow.radius = shadowSoft ? 3 : 0;
+  if (!shadowFit) {
+    Object.assign(cam, MOON_FULL);
+    moon.target.position.set(YARD.w / 2, 0, YARD.h / 2);
+  } else {
+    const halfH = (camMode === 1 ? 700 : 380) / zoom;
+    const R = Math.max(halfH * (innerWidth / innerHeight), halfH * 1.8) + 120;
+    Object.assign(cam, { left: -R, right: R, top: R, bottom: -R });
+    const texel = (2 * R) / SHADOW_SIZES[shadowIdx];
+    moon.target.position.set(Math.round(camTarget.x / texel) * texel, 0, Math.round(camTarget.z / texel) * texel);
+  }
+  moon.position.copy(moon.target.position).add(MOON_OFFSET);
+  moon.target.updateMatrixWorld();
+  cam.updateProjectionMatrix();
+}
+
 // ---------- post-processing ----------
 const GRADE = {
   uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
@@ -269,6 +315,7 @@ let gtao: GTAOPass;
 let bloom: UnrealBloomPass;
 let smaa: SMAAPass;
 let grade: ShaderPass;
+let output: OutputPass;
 function buildComposer(): void {
   composer?.dispose();
   const cam = activeCamera();
@@ -282,19 +329,15 @@ function buildComposer(): void {
   // must not be in that buffer, or the AO wraps around invisible geometry. Hide them for that render.
   const gtaoRender = gtao.render.bind(gtao);
   gtao.render = (...args: Parameters<GTAOPass['render']>) => {
-    const hidden: THREE.Object3D[] = [];
-    scene.traverseVisible((o) => {
-      const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
-      if ((o as THREE.Sprite).isSprite || (mat && !Array.isArray(mat) && mat.transparent)) hidden.push(o);
-    });
-    hidden.forEach((o) => (o.visible = false));
+    const hidden = hideFx();
     gtaoRender(...args);
     hidden.forEach((o) => (o.visible = true));
   };
   composer.addPass(gtao);
   bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.55, 0.9);
   composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  output = new OutputPass();
+  composer.addPass(output);
   smaa = new SMAAPass();
   composer.addPass(smaa);
   grade = new ShaderPass(GRADE);
@@ -319,7 +362,7 @@ const hud = new Hud(
     { key: '9', label: 'rain', on: true, help: 'Line-segment rain' },
   ],
   gpuName(renderer.getContext()),
-  `${CONTROLS_HINT} · C camera · wheel zoom`,
+  `${CONTROLS_HINT} · C camera · wheel zoom<br>V debug view · −/= moon shadow resolution · F fit shadow to view · G soft shadow edges`,
 );
 
 function applyToggles(): void {
@@ -344,6 +387,19 @@ function applyToggles(): void {
   scene.environment = hud.get('8') ? envMap : null;
   hemi.intensity = hud.get('8') ? 0.35 : 0.9;
   rain.lines.visible = hud.get('9');
+  // Debug views override some passes.
+  const v = debug.view;
+  if (!gtao || v === 'final') {
+    if (gtao) gtao.output = GTAOPass.OUTPUT.Default;
+    if (output) output.enabled = true;
+    return;
+  }
+  bloom.enabled = false;
+  grade.enabled = false;
+  const buffer = v === 'normals' || v === 'depth' || v === 'ambient occlusion';
+  gtao.enabled = buffer || (v === 'clay (lighting only)' && hud.get('4'));
+  gtao.output = v === 'normals' ? GTAOPass.OUTPUT.Normal : v === 'depth' ? GTAOPass.OUTPUT.Depth : v === 'ambient occlusion' ? GTAOPass.OUTPUT.Denoise : GTAOPass.OUTPUT.Default;
+  output.enabled = !buffer;
 }
 
 function resize(): void {
@@ -373,6 +429,20 @@ function frame(now: number): void {
     applyToggles();
     resize();
   }
+  if (input.take('KeyV')) {
+    debug.index = (debug.index + 1) % VIEWS.length;
+    applyToggles();
+  }
+  if (input.take('Minus')) {
+    shadowIdx = Math.max(0, shadowIdx - 1);
+    applyShadowSize();
+  }
+  if (input.take('Equal')) {
+    shadowIdx = Math.min(SHADOW_SIZES.length - 1, shadowIdx + 1);
+    applyShadowSize();
+  }
+  if (input.take('KeyF')) shadowFit = !shadowFit;
+  if (input.take('KeyG')) shadowSoft = !shadowSoft;
   if (input.take('KeyC')) {
     camMode = (camMode + 1) % CAMS.length;
     buildComposer();
@@ -439,10 +509,22 @@ function frame(now: number): void {
   flashes.update(sb);
   (grade.uniforms.uTime as { value: number }).value = t;
 
+  updateMoonShadow();
   renderer.info.reset();
-  composer.render();
+  const view = debug.view;
+  const override = view === 'wireframe' ? debug.wire : view === 'clay (lighting only)' ? debug.clay : view === 'shadow-map texels' ? debug.texel : null;
+  if (override) {
+    const hidden = hideFx();
+    if (view === 'shadow-map texels') debug.renderLightDepth(scene, moon, camTarget);
+    scene.overrideMaterial = override;
+    composer.render();
+    scene.overrideMaterial = null;
+    hidden.forEach((o) => (o.visible = true));
+    if (view === 'shadow-map texels') debug.drawInset(Math.min(260, innerHeight * 0.4));
+  } else composer.render();
   const info = renderer.info.render;
-  hud.extra = `camera: <b>${CAMS[camMode]}</b> · ${renderer.domElement.width}×${renderer.domElement.height}<br>${info.calls} draw calls · ${(info.triangles / 1000).toFixed(0)}k tris`;
+  const sc = moon.shadow.camera, sz = SHADOW_SIZES[shadowIdx];
+  hud.extra = `view: <b>${view}</b> · camera: <b>${CAMS[camMode]}</b><br>${renderer.domElement.width}×${renderer.domElement.height} · ${info.calls} draw calls · ${(info.triangles / 1000).toFixed(0)}k tris<br>moon shadow: <b>${sz}²</b> over ${(sc.right - sc.left).toFixed(0)}×${(sc.top - sc.bottom).toFixed(0)} units = <b>${((sc.right - sc.left) / sz).toFixed(2)}</b> units/texel<br>fit to view: <b>${shadowFit ? 'on' : 'off'}</b> · soft edges: <b>${shadowSoft ? 'on' : 'off'}</b>`;
   hud.frame(now);
   requestAnimationFrame(frame);
 }
