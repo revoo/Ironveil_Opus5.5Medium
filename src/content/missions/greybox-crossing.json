@@ -1,0 +1,99 @@
+{
+  "id": "greybox-crossing",
+  "title": "Grey Box: The Crossing",
+  "level": "greybox-crossing",
+  "briefing": "PLACEHOLDER. A test mission that exercises every mission system once. Get across the checkpoint line and reach the rail depot. Staying unseen is optional, and it changes how the mission ends.",
+  "playerName": "Ironveil",
+  "units": [
+    { "id": "gate_guard_north", "name": "Gate North", "marker": "gate_north", "ai": "simple", "skill": 0.4 },
+    { "id": "gate_guard_south", "name": "Gate South", "marker": "gate_south", "ai": "simple", "skill": 0.4 },
+    { "id": "alley_patrol", "name": "Alley Patrol", "marker": "alley_start", "ai": "simple", "posture": { "patrol": "alley_patrol" }, "skill": 0.5 },
+    { "id": "mud_watch", "name": "Mud Watch", "marker": "mud_watch", "ai": "simple", "skill": 0.35 },
+    { "id": "depot_patrol", "name": "Depot Patrol", "marker": "depot_patrol_start", "ai": "simple", "posture": { "patrol": "depot_patrol" }, "skill": 0.5 }
+  ],
+  "objectives": [
+    { "id": "cross", "text": "Cross the checkpoint line" },
+    { "id": "stay_hidden", "text": "Stay undetected (optional)" },
+    { "id": "reach_depot", "text": "Reach the rail depot", "state": "hidden" }
+  ],
+  "triggers": [
+    {
+      "id": "intro",
+      "when": { "after": 1 },
+      "do": [
+        { "radio": "[GREY BOX] Get us across the checkpoint line. Rail depot, far side.", "from": "Commander" },
+        { "radio": "Main gate's watched. There's an alley up north and a mud cut down south.", "from": "Driver", "delay": 3.5 }
+      ]
+    },
+    {
+      "id": "approach",
+      "when": { "enter": "approach" },
+      "do": [
+        { "checkpoint": "cp_approach" },
+        { "radio": "Two on the gate. I could take them from here—", "from": "Gunner" },
+        { "radio": "Not yet.", "from": "Commander", "delay": 2 },
+        {
+          "choice": {
+            "from": "Commander",
+            "prompt": "How do we cross?",
+            "timeout": 15,
+            "default": 0,
+            "options": [
+              { "text": "Quietly, through the north alley", "do": [{ "setFlag": "route", "value": "north" }, { "radio": "North it is. Keep the revs down.", "from": "Driver" }] },
+              { "text": "Straight through the gate", "do": [{ "setFlag": "route", "value": "gate" }, { "addFlag": "crew_tension" }, { "radio": "...Loading. God help us.", "from": "Loader" }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "spotted",
+      "when": { "alarm": true },
+      "do": [
+        { "objective": "stay_hidden", "state": "failed" },
+        { "radio": "We're spotted! Move, move!", "from": "Commander" },
+        { "radio": "Radio traffic spiking. They're sending something from the depot.", "from": "Loader", "delay": 4 },
+        { "spawn": { "id": "qrf", "name": "Rapid Response", "marker": "qrf_spawn", "ai": "simple", "skill": 0.6 } },
+        { "spawn": { "id": "depot_commander", "name": "Depot Commander", "marker": "commander_spawn", "ai": "boss", "persona": "anchor" } },
+        { "alarm": true }
+      ]
+    },
+    {
+      "id": "gate_cleared",
+      "when": { "destroyed": ["gate_guard_north", "gate_guard_south"] },
+      "do": [{ "radio": "Gate's clear.", "from": "Gunner" }]
+    },
+    {
+      "id": "past_wall",
+      "when": { "enter": "past_wall" },
+      "do": [
+        { "objective": "cross", "state": "complete" },
+        { "objective": "reach_depot", "state": "active" },
+        { "checkpoint": "cp_past" },
+        { "radio": "We're through. Depot's east, past the warehouses.", "from": "Driver" }
+      ]
+    },
+    {
+      "id": "running_hot",
+      "when": { "all": [{ "after": 75, "since": "intro" }, { "not": { "objective": "cross", "is": "complete" } }] },
+      "do": [{ "radio": "Engine's running hot, Commander. We can't sit here all night.", "from": "Driver" }]
+    },
+    {
+      "id": "extract_clean",
+      "when": { "all": [{ "enter": "extraction" }, { "not": { "alarm": true } }] },
+      "do": [
+        { "objective": "stay_hidden", "state": "complete" },
+        { "objective": "reach_depot", "state": "complete" },
+        { "end": "success", "text": "[GREY BOX] Clean crossing. Nobody knows we were here." }
+      ]
+    },
+    {
+      "id": "extract_loud",
+      "when": { "all": [{ "enter": "extraction" }, { "alarm": true }] },
+      "do": [
+        { "objective": "reach_depot", "state": "complete" },
+        { "end": "success", "text": "[GREY BOX] We made it. They'll be looking for us now." }
+      ]
+    }
+  ]
+}
