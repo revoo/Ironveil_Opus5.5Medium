@@ -144,7 +144,8 @@ export class Sandbox {
     return [this.player, this.enemy];
   }
 
-  update(dt: number, input: Input, aimX: number, aimY: number, basis: MoveBasis = WORLD_BASIS): void {
+  /** `tankControls`: W/S drive along the hull, A/D rotate it (for a camera that rides behind the tank). */
+  update(dt: number, input: Input, aimX: number, aimY: number, basis: MoveBasis = WORLD_BASIS, tankControls = false): void {
     this.time += dt;
     this.events = [];
     const p = this.player;
@@ -155,8 +156,18 @@ export class Sandbox {
     if (input.keys.has('KeyD') || input.keys.has('ArrowRight')) ix += 1;
     const il = Math.hypot(ix, iy) || 1;
     const mx0 = basis.rx * ix - basis.fx * iy, my0 = basis.ry * ix - basis.fy * iy;
-    p.vx += (mx0 / il) * 900 * dt;
-    p.vy += (my0 / il) * 900 * dt;
+    if (tankControls) {
+      p.hull += ix * 1.9 * dt;
+      const hc = Math.cos(p.hull), hs = Math.sin(p.hull);
+      p.vx += hc * -iy * 700 * dt;
+      p.vy += hs * -iy * 700 * dt;
+      const lat = -hs * p.vx + hc * p.vy; // tracks resist sliding sideways
+      p.vx -= -hs * lat * Math.min(1, dt * 6);
+      p.vy -= hc * lat * Math.min(1, dt * 6);
+    } else {
+      p.vx += (mx0 / il) * 900 * dt;
+      p.vy += (my0 / il) * 900 * dt;
+    }
     const drag = Math.exp(-dt * (ix || iy ? 2.2 : 3.5));
     p.vx *= drag;
     p.vy *= drag;
@@ -167,7 +178,7 @@ export class Sandbox {
     }
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    if (sp > 20) p.hull += wrap(Math.atan2(p.vy, p.vx) - p.hull) * Math.min(1, dt * 6);
+    if (sp > 20 && !tankControls) p.hull += wrap(Math.atan2(p.vy, p.vx) - p.hull) * Math.min(1, dt * 6);
     for (const b of RECTS) circleRect(p, p.r, b);
     for (const o of [this.enemy]) {
       const dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy), m = p.r + o.r;

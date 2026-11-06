@@ -193,7 +193,9 @@ const rain = new Rain(scene);
 const flashes = new Flashes(scene);
 
 // ---------- cameras: isometric (default), tilted perspective, straight top-down ----------
-const CAMS = ['isometric', 'tilted perspective', 'top-down'] as const;
+// 'chase' is deliberately unpolished: everything else was built for a camera far above, and this exposes it.
+const CAMS = ['isometric', 'tilted perspective', 'top-down', 'chase (third person)'] as const;
+let chaseYaw = 0;
 let camMode = 0;
 let zoom = 1;
 const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 6000);
@@ -201,7 +203,7 @@ const persp = new THREE.PerspectiveCamera(32, 1, 10, 6000);
 const camTarget = new THREE.Vector3(sb.player.x, 0, sb.player.y);
 let shake = 0;
 function activeCamera(): THREE.Camera {
-  return camMode === 1 ? persp : ortho;
+  return camMode === 1 || camMode === 3 ? persp : ortho;
 }
 function placeCamera(): void {
   const aspect = innerWidth / innerHeight;
@@ -209,6 +211,7 @@ function placeCamera(): void {
   Object.assign(ortho, { left: -halfH * aspect, right: halfH * aspect, top: halfH, bottom: -halfH });
   ortho.updateProjectionMatrix();
   persp.aspect = aspect;
+  persp.fov = camMode === 3 ? 58 : 32;
   persp.updateProjectionMatrix();
   const sx = (Math.random() - 0.5) * shake, sz = (Math.random() - 0.5) * shake;
   const t = camTarget.clone().add(new THREE.Vector3(sx, 0, sz));
@@ -222,6 +225,12 @@ function placeCamera(): void {
   } else if (camMode === 1) {
     persp.position.set(t.x, 1150 / zoom, t.z + 680 / zoom);
     persp.lookAt(t.x, 0, t.z + 30);
+  } else if (camMode === 3) {
+    // ride behind and above the hull, looking a little ahead of the tank
+    const p = sb.player, dx = Math.cos(chaseYaw), dz = Math.sin(chaseYaw);
+    const dist = 130 / zoom, height = 46 / zoom;
+    persp.position.set(p.x - dx * dist + sx * 0.3, height, p.y - dz * dist + sz * 0.3);
+    persp.lookAt(p.x + dx * 90, 14, p.y + dz * 90);
   } else {
     ortho.up.set(0, 0, -1);
     ortho.position.set(t.x, 2000, t.z);
@@ -275,7 +284,7 @@ function updateMoonShadow(): void {
     Object.assign(cam, MOON_FULL);
     moon.target.position.set(YARD.w / 2, 0, YARD.h / 2);
   } else {
-    const halfH = (camMode === 1 ? 700 : 380) / zoom;
+    const halfH = (camMode === 1 ? 700 : camMode === 3 ? 650 : 380) / zoom;
     const R = Math.max(halfH * (innerWidth / innerHeight), halfH * 1.8) + 120;
     Object.assign(cam, { left: -R, right: R, top: R, bottom: -R });
     const texel = (2 * R) / SHADOW_SIZES[shadowIdx];
@@ -445,6 +454,7 @@ function frame(now: number): void {
   if (input.take('KeyG')) shadowSoft = !shadowSoft;
   if (input.take('KeyC')) {
     camMode = (camMode + 1) % CAMS.length;
+    chaseYaw = sb.player.hull;
     buildComposer();
   }
 
@@ -455,9 +465,16 @@ function frame(now: number): void {
   placeCamera();
   cam.updateMatrixWorld();
   ray.setFromCamera(new THREE.Vector2((input.mouseX / innerWidth) * 2 - 1, -(input.mouseY / innerHeight) * 2 + 1), cam);
-  if (!ray.ray.intersectPlane(groundPlane, aim)) aim.set(p.x + 1, 0, p.y);
+  const hit = ray.ray.intersectPlane(groundPlane, aim);
+  if (!hit || (camMode === 3 && Math.hypot(aim.x - p.x, aim.z - p.y) > 1500)) aim.set(p.x + Math.cos(p.hull) * 400, 0, p.y + Math.sin(p.hull) * 400);
+  if (camMode === 3) {
+    let d = p.hull - chaseYaw;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    chaseYaw += d * Math.min(1, dt * 3);
+  }
 
-  sb.update(dt, input, aim.x, aim.z, moveBasis(cam));
+  sb.update(dt, input, aim.x, aim.z, moveBasis(cam), camMode === 3);
   input.endFrame();
   sb.tanks.forEach((t, i) => syncTank(t, tankViews[i], i));
 
