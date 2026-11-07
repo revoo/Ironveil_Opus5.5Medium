@@ -318,7 +318,6 @@ export interface TankModel {
   root: THREE.Group;
   turret: THREE.Group;
   barrel: THREE.Group;
-  head: THREE.SpotLight;
   beam: THREE.Mesh;
   wheels: THREE.Mesh[];
   materials: THREE.MeshStandardMaterial[];
@@ -459,17 +458,13 @@ export function buildTank(scene: THREE.Scene, team: 0 | 1, beamMat: THREE.Materi
   }
   shadowed(root);
 
-  const head = new THREE.SpotLight(0xfff0cf, 220000, 520, 0.5, 0.6, 2);
-  head.position.set(24, 13, 0);
-  head.target.position.set(160, 0, 0);
-  head.castShadow = false;
-  root.add(head, head.target);
+  // The headlight itself is not part of the model: see `Headlights` in fx.ts.
   const beam = new THREE.Mesh(new THREE.ConeGeometry(64, 200, 24, 1, true), beamMat);
   beam.rotation.z = Math.PI / 2;
   beam.position.set(122, 12, 0);
   root.add(beam);
   scene.add(root);
-  return { root, turret, barrel, head, beam, wheels, materials: [paint, steel, trackMat] };
+  return { root, turret, barrel, beam, wheels, materials: [paint, steel, trackMat] };
 }
 
 /**

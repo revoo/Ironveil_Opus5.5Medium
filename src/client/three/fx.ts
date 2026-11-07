@@ -421,6 +421,62 @@ export class Flashes {
   }
 }
 
+// ---------------------------------------------------------------- tank headlights
+/** One tank's headlight request for this frame, in world units (x, z ground plane). */
+export interface HeadlightReq {
+  x: number;
+  z: number;
+  y: number;
+  hull: number;
+  intensity: number;
+}
+
+/**
+ * A fixed pool of headlight spotlights that never leaves the scene. three.js bakes the number of
+ * visible lights into every lit shader, so a light per tank (hidden with its tank when the tank
+ * leaves vision) recompiled every material each time an enemy appeared or vanished: multi-second
+ * freezes. Here the light count is constant; unused lights just sit at intensity 0.
+ */
+export class Headlights {
+  static readonly COUNT = 4;
+  private lights: THREE.SpotLight[] = [];
+  private reqs: HeadlightReq[] = [];
+  constructor(scene: THREE.Scene) {
+    for (let i = 0; i < Headlights.COUNT; i++) {
+      const l = new THREE.SpotLight(0xfff0cf, 0, 520, 0.5, 0.6, 2);
+      l.castShadow = false;
+      scene.add(l, l.target);
+      this.lights.push(l);
+    }
+  }
+  /** Call once per frame before `request`. */
+  begin(): void {
+    this.reqs.length = 0;
+  }
+  request(r: HeadlightReq): void {
+    this.reqs.push(r);
+  }
+  /** Assign the pool to the requests nearest `focus` (the player); switch the rest off. */
+  end(focus: Vec | null): void {
+    if (focus && this.reqs.length > Headlights.COUNT) {
+      const d = (r: HeadlightReq) => (r.x - focus.x) ** 2 + (r.z - focus.y) ** 2;
+      this.reqs.sort((a, b) => d(a) - d(b));
+    }
+    this.lights.forEach((l, i) => {
+      const r = this.reqs[i];
+      if (!r) {
+        l.intensity = 0;
+        return;
+      }
+      const c = Math.cos(r.hull);
+      const s = Math.sin(r.hull);
+      l.intensity = r.intensity;
+      l.position.set(r.x + c * 24, r.y + 13, r.z + s * 24);
+      l.target.position.set(r.x + c * 160, r.y, r.z + s * 160);
+    });
+  }
+}
+
 /** Expanding ground arcs around the player showing the direction of unseen sounds. */
 export class CueArcs {
   private arcs: { mesh: THREE.Mesh; t: number }[] = [];

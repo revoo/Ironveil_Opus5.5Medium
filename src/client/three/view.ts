@@ -23,7 +23,7 @@ import type { Settings } from '../settings';
 import { buildEnvironment, procUniforms } from './materials';
 import { buildTank, radialTexture, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
-import { CueArcs, Decals, Flashes, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
+import { CueArcs, Decals, Flashes, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
 import { Hud3D } from './hud';
 
 export interface MissionViewDeps {
@@ -91,6 +91,7 @@ export class MissionView3D {
   private sparks: Sparks;
   private smoke: SmokeFx;
   private flashes: Flashes;
+  private headlights: Headlights;
   private arcs: CueArcs;
   private barrelMark: THREE.Mesh;
   private camTarget = new THREE.Vector3();
@@ -164,6 +165,7 @@ export class MissionView3D {
     this.sparks = new Sparks(scene);
     this.smoke = new SmokeFx(scene);
     this.flashes = new Flashes(scene);
+    this.headlights = new Headlights(scene);
     this.arcs = new CueArcs(scene);
     for (let i = 0; i < 12; i++) {
       const g = new THREE.Group();
@@ -223,10 +225,38 @@ export class MissionView3D {
     // lines already on the radio at construction (e.g. after a checkpoint) are not replayed
     for (const r of this.session.radio) this.heardRadio.add(`${r.tick}|${r.from}|${r.text}`);
     this.noticeCount = this.session.notices.length;
+    this.prewarmShaders();
     this.raf = requestAnimationFrame((t) => this.frame(t));
   }
 
   // ------------------------------------------------------------------ setup
+  /**
+   * Compile every shader the mission can need before the first frame, so nothing compiles mid-play
+   * (a first-time compile stalls the main thread). `renderer.compile` skips invisible objects, so
+   * pooled FX and one tank per team are shown for the call, then hidden again. The warm-up tanks
+   * stay hidden rather than disposed: disposing their materials would release the cached programs.
+   */
+  private prewarmShaders(): void {
+    for (const team of [0, 1] as const) {
+      const beam = coneMaterial(0xfff0cf, 0.06);
+      this.beamMats.push(beam);
+      buildTank(this.scene, team, beam).root.visible = false;
+    }
+    const hidden: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+    });
+    // Compile the variant the composer actually renders (into its offscreen target: no tone
+    // mapping, linear output), not the on-screen one.
+    this.renderer.setRenderTarget(this.composer.renderTarget1);
+    this.renderer.compile(this.scene, this.camera);
+    this.renderer.setRenderTarget(null);
+    for (const o of hidden) o.visible = false;
+  }
+
   private buildComposer(): void {
     const low = this.d.settings.lowEffects;
     this.composer = new EffectComposer(this.renderer);
@@ -415,7 +445,9 @@ export class MissionView3D {
     }
 
     const cur = s.obs, prev = s.prevObs, a = s.alpha;
+    this.headlights.begin();
     const selfPos = this.renderTanks(prev, cur, a, dt);
+    this.headlights.end(selfPos);
     this.renderShells(prev, cur, a);
     this.renderGhosts(cur);
 
@@ -560,7 +592,7 @@ export class MissionView3D {
       v.last = { x, y };
       // In brush, a tank is drawn sunk a little and its lights dimmed (it is hidden from the enemy).
       m.root.position.y = t.inBrush ? -3 : 0;
-      m.head.intensity = t.quiet ? 60000 : 220000;
+      this.headlights.request({ x, z: y, y: m.root.position.y, hull, intensity: t.quiet ? 60000 : 220000 });
       m.beam.visible = !t.quiet;
       if (t.id === this.session.playerId) self = { x, y };
     }
@@ -576,7 +608,6 @@ export class MissionView3D {
     v.model.root.position.set(x, 0, y);
     v.model.turret.rotation.y += (Math.random() - 0.5) * 1.2;
     v.model.turret.rotation.z = (Math.random() - 0.5) * 0.2;
-    v.model.head.intensity = 0;
     v.model.beam.visible = false;
     for (const mat of v.model.materials) {
       mat.color.multiplyScalar(0.22);
