@@ -58,8 +58,8 @@ npm run dev         # http://localhost:5173
 
 ## Status and next steps
 
-- Branch `campaign-foundation` holds all campaign work (not yet merged to `main`).
-  `poc/render-tech` is an archived rendering experiment; its code now lives in `src/client/three/`.
+- `main` holds everything. The Render Lab rendering experiment is preserved as the tag
+  `archive/poc-render-tech` (not a branch); its code now lives in `src/client/three/`.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Planned: crew system phase 1, Ink dialogue, first real LDtk mission, recorded CC0 weapon/engine
   samples to replace the weakest synthesised SFX.
