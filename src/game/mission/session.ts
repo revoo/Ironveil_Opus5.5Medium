@@ -4,7 +4,7 @@
 import { World } from '../../sim/world';
 import { TeamObserver, type Observation } from '../../sim/observation';
 import type { SoundCue } from '../../sim/sound';
-import { neutralInput, type TankInput, type Team } from '../../sim/types';
+import { neutralInput, type TankInput } from '../../sim/types';
 import { DT, TUNING } from '../../sim/tuning';
 import type { Vec } from '../../sim/math';
 import type { GameMap } from '../../sim/map';
@@ -13,7 +13,6 @@ import { SimpleController, type Posture } from '../../ai/simple';
 import { degToRad, inZone, loadLevel, zoneCentre, type Level } from '../../level/load';
 import type { LevelData } from '../../level/format';
 import type { TimedEvent } from '../session';
-import type { PlayableSession } from '../playable';
 import { MissionRunner, type MissionQuery, type RunnerState } from './runner';
 import type { Action, ChoiceDef, MissionDef, ObjectiveState, PostureDef, UnitDef } from './types';
 import { validateMission } from './validate';
@@ -61,7 +60,7 @@ export interface MissionNotice {
 const MAX_STEPS_PER_ADVANCE = 8;
 const HZ = TUNING.tickHz;
 
-export class MissionSession implements PlayableSession {
+export class MissionSession {
   readonly playerId = 0;
   readonly level: Level;
   world!: World;
@@ -70,7 +69,6 @@ export class MissionSession implements PlayableSession {
   prevObs!: Observation;
   paused = false;
   needsFreshInput = false;
-  training = null;
   runner!: MissionRunner;
   simple!: SimpleController;
   boss: BotController | null = null;
@@ -353,12 +351,6 @@ export class MissionSession implements PlayableSession {
     const barks = this.simple.barks.map((b) => ({ from: `${b.from} (enemy)`, text: b.text, tick: b.tick }));
     const boss = this.boss ? this.boss.radio.map((b) => ({ ...b, from: `${b.from} (enemy)` })) : [];
     return [...this.missionRadio, ...barks, ...boss].sort((a, b) => a.tick - b.tick);
-  }
-
-  botInfo(id: number): { persona: string; team: Team } | undefined {
-    const uid = this.tankUnit.get(id);
-    if (!uid) return undefined;
-    return { persona: this.unitDefs.get(uid)?.ai === 'boss' ? 'Commander' : 'Garrison', team: 1 };
   }
 
   // ------------------------------------------------------------------ simulation

@@ -6,7 +6,7 @@ import { InputManager } from './input';
 import { AudioEngine } from './audio';
 import { ACTION_LABELS, codeLabel, DEFAULT_BINDINGS, loadSettings, saveSettings, type Action, type Settings } from './settings';
 import type { Observation } from '../sim/observation';
-import type { PlayableSession } from '../game/playable';
+import type { LocalSession } from '../game/session';
 import type { Difficulty } from '../ai/personality';
 import { MissionSession, type Checkpoint } from '../game/mission/session';
 import { MISSIONS, missionById } from '../content/missions';
@@ -52,11 +52,9 @@ function closeView3d(): void {
   document.getElementById('game')!.style.visibility = '';
 }
 
-/** The running mission session, whichever view renders it. */
+/** The running mission session (missions are always rendered by the 3D view). */
 function activeMission(): MissionSession | null {
-  if (view3d) return view3d.session;
-  const s = gameScene()?.session;
-  return s instanceof MissionSession ? s : null;
+  return view3d?.session ?? null;
 }
 
 function gameScene(): GameScene | null {
@@ -328,9 +326,8 @@ function startMatch(training = lastTraining): void {
   game.scene.start('hud', { model: hud, settings });
 }
 
-function showResults(obs: Observation, session: PlayableSession): void {
+function showResults(obs: Observation, session: LocalSession): void {
   inMatch = false;
-  if (session instanceof MissionSession) return missionResults(session);
   const w = obs.match.winner;
   const title = w === 'draw' ? 'Draw' : w === obs.team ? 'Victory' : 'Defeat';
   const me = session.world.tank(session.playerId);
@@ -374,8 +371,6 @@ function missionBriefing(id: string): void {
 
 function startMission(id: string, checkpoint?: Checkpoint): void {
   audio.unlock();
-  hud = newHudModel();
-  (window as unknown as { __ironveil: { hud: () => HudModel } }).__ironveil.hud = () => hud;
   clearUi();
   inMatch = true;
   paused = false;
@@ -426,46 +421,7 @@ function missionResults(s: MissionSession): void {
   d.querySelector('#menu')!.addEventListener('click', quitToMenu);
 }
 
-/** Objectives, detection meter, notices and the real-time choice prompt, drawn over the game. */
-const missionEl = document.createElement('div');
-missionEl.id = 'mission-hud';
-document.body.appendChild(missionEl);
-let missionHtml = '';
-function renderMissionHud(): void {
-  requestAnimationFrame(renderMissionHud);
-  const ms = view3d ? null : activeMission(); // the 3D view draws its own HUD
-  if (!ms || !inMatch || ms.outcome) {
-    if (missionHtml) missionEl.innerHTML = missionHtml = '';
-    return;
-  }
-  const tick = ms.world.tick;
-  const det = ms.detection();
-  const detLabel = det >= 1 ? 'SPOTTED' : det > 0.6 ? 'ALERT' : det > 0.05 ? 'SUSPICIOUS' : 'HIDDEN';
-  const obj = ms
-    .objectives()
-    .map((x) => `<li class="obj ${x.state}">${x.state === 'complete' ? '✔' : x.state === 'failed' ? '✖' : '▸'} ${escapeHtml(x.text)}</li>`)
-    .join('');
-  const notes = ms.notices
-    .filter((n) => tick - n.tick < 30 * 4)
-    .map((n) => `<div class="notice-pop">${escapeHtml(n.text)}</div>`)
-    .join('');
-  let choice = '';
-  if (ms.choice) {
-    const c = ms.choice;
-    const left = Math.max(0, (c.expiresTick - tick) / (c.expiresTick - c.startedTick));
-    choice = `<div class="choice">
-      <div class="who">${escapeHtml(c.from ?? '')}</div>
-      <div class="prompt">${escapeHtml(c.prompt)}</div>
-      ${c.options.map((o, i) => `<div class="opt${i === c.defaultIndex ? ' def' : ''}"><b>${i + 1}</b> ${escapeHtml(o)}</div>`).join('')}
-      <div class="timer"><span style="width:${(left * 100).toFixed(1)}%"></span></div>
-    </div>`;
-  }
-  const html = `<div class="objectives"><div class="title">${escapeHtml(ms.def.title)}</div><ul>${obj}</ul></div>
-    <div class="detect ${detLabel.toLowerCase()}"><span>${detLabel}</span><div class="bar"><i style="width:${Math.round(det * 100)}%"></i></div></div>
-    <div class="notices">${notes}</div>${choice}`;
-  if (html !== missionHtml) missionEl.innerHTML = missionHtml = html;
-}
-requestAnimationFrame(renderMissionHud);
+// Decisions: number keys answer the active mission choice.
 window.addEventListener('keydown', (e) => {
   const ms = activeMission();
   if (!ms || !ms.choice || paused) return;

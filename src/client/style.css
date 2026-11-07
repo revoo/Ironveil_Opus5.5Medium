@@ -56,36 +56,14 @@ input[type='range'] { width: 220px; accent-color: #a5b88d; }
 .notice { font-size: 15px; color: var(--muted); margin-top: 14px; }
 @media (max-width: 600px) { h1 { font-size: 44px; } .row label { min-width: 100px; } }
 
-/* ---- mission overlay ---- */
-#mission-hud { position: fixed; inset: 0; pointer-events: none; font-family: Rajdhani, 'Segoe UI', system-ui, sans-serif; color: #edf4df; z-index: 5; }
-#mission-hud .objectives { position: absolute; top: calc(21vh + 8px); right: 18px; width: min(360px, 40vw); background: rgba(16, 27, 23, 0.72); border: 1px solid #2c4236; padding: 10px 14px; }
-#mission-hud .objectives .title { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #f1d09c; font-size: 14px; margin-bottom: 4px; }
-#mission-hud ul, .objlist { list-style: none; margin: 0; padding: 0; font-size: 17px; line-height: 1.4; }
+/* ---- mission screens ---- */
+.objlist { list-style: none; margin: 0; padding: 0; font-size: 17px; line-height: 1.4; }
 .obj.complete { color: #a5d8a0; } .obj.failed { color: #ff9177; text-decoration: line-through; }
-#mission-hud .detect { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 240px; text-align: center; font-weight: 700; letter-spacing: 0.14em; font-size: 14px; }
-#mission-hud .detect .bar { height: 6px; background: rgba(16, 27, 23, 0.8); border: 1px solid #2c4236; margin-top: 3px; }
-#mission-hud .detect .bar i { display: block; height: 100%; background: #f1d09c; transition: width 0.12s linear; }
-#mission-hud .detect.hidden { color: #a5d8a0; } #mission-hud .detect.suspicious { color: #f1d09c; }
-#mission-hud .detect.alert { color: #ffb36a; } #mission-hud .detect.spotted { color: #ff6a4a; }
-#mission-hud .detect.spotted .bar i, #mission-hud .detect.alert .bar i { background: #ff6a4a; }
-#mission-hud .notices { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); text-align: center; }
-#mission-hud .notice-pop { font-size: 20px; font-weight: 600; color: #f1d09c; text-shadow: 0 1px 3px #000; margin-bottom: 4px; }
-#mission-hud .choice { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(520px, 90vw); background: rgba(16, 27, 23, 0.88); border: 1px solid #f1d09c; padding: 12px 16px; }
-#mission-hud .choice .who { color: #a4b6a4; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; }
-#mission-hud .choice .prompt { font-size: 22px; font-weight: 700; margin: 2px 0 8px; }
-#mission-hud .choice .opt { font-size: 19px; padding: 3px 0; }
-#mission-hud .choice .opt b { display: inline-block; width: 26px; color: #f1d09c; }
-#mission-hud .choice .opt.def::after { content: '  (default)'; color: #a4b6a4; font-size: 14px; }
-#mission-hud .choice .timer { height: 4px; background: #2c4236; margin-top: 8px; }
-#mission-hud .choice .timer span { display: block; height: 100%; background: #f1d09c; }
 .brief { color: #c8d4c4; max-width: 62ch; }
 
 /* ---- 3D mission view ---- */
 #view3d-host { display: none; position: fixed; inset: 0; z-index: 1; background: #05080a; overflow: hidden; }
 #view3d-host canvas.view3d { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: none; }
-/* the mission overlay sits above the 3D view */
-#mission-hud { z-index: 6; }
-#view3d-host ~ #mission-hud .objectives { top: 150px; }
 
 /* ---- menu ---- */
 .mission-card { border: 1px solid #f1d09c; background: rgba(241, 208, 156, 0.06); padding: 12px 14px; margin: 10px 0 4px; }
@@ -94,8 +72,6 @@ input[type='range'] { width: 220px; accent-color: #a5b88d; }
 details.skirmish { margin-top: 14px; border-top: 1px solid #2c4236; padding-top: 10px; }
 details.skirmish summary { cursor: pointer; color: #a4b6a4; font-size: 15px; letter-spacing: 0.04em; }
 details.skirmish[open] summary { margin-bottom: 8px; }
-/* In the 3D view the camera keeps the tank centred: keep decisions out of the middle of the screen. */
-#view3d-host ~ #mission-hud .choice { left: auto; right: 18px; bottom: 20px; transform: none; width: min(440px, 44vw); }
 
 /* ================================================================ 3D mission HUD
    No boxes: text floats over the scene on soft scrims; the cannon state rides on the cursor. */

@@ -2,9 +2,6 @@
 // most recent fixed ticks (prevObs -> obs by session.alpha), so motion is smooth at any frame rate.
 import Phaser from 'phaser';
 import { LocalSession, type SessionConfig } from '../game/session';
-import type { PlayableSession } from '../game/playable';
-import { MissionSession, type Checkpoint } from '../game/mission/session';
-import { missionById } from '../content/missions';
 import type { Observation, ObsEvent, TankView, SmokeView } from '../sim/observation';
 import { lerp, lerpAngle, type Vec } from '../sim/math';
 import { raycastWalls, terrainAt, Terrain } from '../sim/map';
@@ -80,13 +77,11 @@ export interface GameSceneData {
   input: InputManager;
   audio: AudioEngine;
   hud: HudModel;
-  onEnd: (obs: Observation, session: PlayableSession) => void;
-  /** Play a mission instead of a deathmatch; optionally resume from a checkpoint. */
-  mission?: { id: string; checkpoint?: Checkpoint };
+  onEnd: (obs: Observation, session: LocalSession) => void;
 }
 
 export class GameScene extends Phaser.Scene {
-  session!: PlayableSession;
+  session!: LocalSession;
   private d!: GameSceneData;
   private fx!: FxSystem;
   private tanks = new Map<number, TankSprites>();
@@ -130,15 +125,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     registerTextures(this);
-    const m = this.d.mission;
-    if (m) {
-      const entry = missionById(m.id);
-      if (!entry) throw new Error(`unknown mission ${m.id}`);
-      const ms = new MissionSession({ ...entry, seed: (Date.now() & 0xffff) + 1 });
-      if (m.checkpoint) ms.loadCheckpoint(m.checkpoint);
-      this.session = ms;
-    } else this.session = new LocalSession(this.d.cfg);
-    this.d.hud.mission = !!m;
+    this.session = new LocalSession(this.d.cfg);
     const map = this.session.map;
     const key = `ground:${map.id}:${map.version}`;
     if (!this.textures.exists(key)) {
@@ -346,10 +333,6 @@ export class GameScene extends Phaser.Scene {
         }
         break;
       case 'match':
-        if (this.d.mission) {
-          if (e.phase === 'ended') hud.banner = { text: e.winner === this.session.obs.team ? 'MISSION COMPLETE' : 'MISSION FAILED', sub: '', t: 0, color: e.winner === this.session.obs.team ? '#8fe3ff' : '#ff8a6a' };
-          break;
-        }
         if (e.phase === 'live') hud.banner = { text: 'ENGAGE', sub: `First to ${this.session.obs.match.killTarget} kills`, t: 0, color: '#e8f4ff' };
         if (e.phase === 'suddenDeath') hud.banner = { text: 'SUDDEN DEATH', sub: 'Next kill wins', t: 0, color: '#ff9a6a' };
         if (e.phase === 'ended') {

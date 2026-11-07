@@ -1,4 +1,4 @@
-// Tactical position search: firing spots, cover, flank angles, search spots.
+// Tactical position search: firing spots, cover and flank angles. (Search spots live in bot.ts.)
 // Uses only static map geometry and *known* smoke clouds.
 import { pointSegmentDistance, type Vec } from '../sim/math';
 import { raycastWalls, terrainAt, Terrain, type GameMap } from '../sim/map';
@@ -131,26 +131,6 @@ export function findCoverSpot(ctx: TacCtx, threats: Vec[], o: CoverOpts): Vec | 
     }
   }
   return best;
-}
-
-/** Plausible hiding spots near a last-known position (brush, wall corners), ordered by likelihood. */
-export function findSearchSpots(ctx: TacCtx, last: Vec, heading: Vec | null, from: Vec, rng: Rng, count = 3): Vec[] {
-  const predicted = heading ? { x: last.x + heading.x * 140, y: last.y + heading.y * 140 } : last;
-  const scored: { p: Vec; s: number }[] = [];
-  for (const p of candidates(ctx.nav, predicted, 290)) {
-    let s = -Math.hypot(p.x - predicted.x, p.y - predicted.y) / 200 + rng.next() * 0.5;
-    if (terrainAt(ctx.map, p.x, p.y) === Terrain.Brush) s += 0.8;
-    // Hidden from where we are now = somewhere they could be.
-    if (!wallLos(ctx.map, from, p)) s += 0.6;
-    scored.push({ p, s });
-  }
-  scored.sort((a, b) => b.s - a.s);
-  const out: Vec[] = [last];
-  for (const c of scored) {
-    if (out.length >= count + 1) break;
-    if (out.every((q) => Math.hypot(q.x - c.p.x, q.y - c.p.y) > 150)) out.push(c.p);
-  }
-  return out;
 }
 
 /** How far a hidden tank is assumed to be able to get per second (a little under top speed). */

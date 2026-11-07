@@ -1,5 +1,7 @@
 # Validation results
 
+> **Scope:** measured on the original Skirmish (team deathmatch) build. Mission mode and the 3D renderer are not measured here yet.
+
 Measured on the development machine (Windows 11, Node 24.22, Chromium-based in-app browser). These
 numbers describe this build and are not capacity promises. Human-judged gates are tracked separately
 in [PLAYTEST.md](PLAYTEST.md), and all of them are **awaiting playtest**.

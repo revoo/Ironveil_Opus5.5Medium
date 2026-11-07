@@ -1,5 +1,7 @@
 # Playtest guide
 
+> **Scope:** written for the original Skirmish (team deathmatch) build. Mission mode is not covered yet.
+
 Tests establish correctness; only people can judge fun. All human gates are **awaiting playtest**.
 Nothing here has been marked as validated.
 

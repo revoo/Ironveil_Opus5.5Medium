@@ -1,5 +1,7 @@
 # Tactical AI
 
+> This document covers the **tactical** AI, used by Skirmish bots and mission bosses. Ordinary mission units use the simpler garrison AI in `src/ai/simple.ts` (postures, a suspicion meter, alarms). See [MISSIONS.md](MISSIONS.md#how-the-simple-ai-notices-you).
+
 Bots should feel purposeful, tactical, fallible and varied, and win through behaviour rather than
 secret knowledge. The design borrows F.E.A.R.'s split between deciding *what* to want (goals) and
 working out *how* (planning), with squad-level coordination on top.

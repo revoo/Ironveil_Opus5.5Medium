@@ -8,7 +8,6 @@
 //   - rain streaks: vertical noise stretched along Y on vertical faces
 //   - dust: lighter tone on upward-facing surfaces
 //   - micro bump: the noise gradient tilts the normal, so light rakes across pitted concrete
-//   - wet patches (ground): darker, mirror-smooth, and flattened so they reflect the environment
 import * as THREE from 'three';
 
 export const procUniforms = {
@@ -21,7 +20,7 @@ export enum Surface {
   Paint = 1,
   Rust = 2,
   Tar = 3,
-  Ground = 4,
+  // 4 was the PoC's cobble ground; the mission ground is its own shader in world.ts
   Track = 5,
 }
 
@@ -100,11 +99,6 @@ export function proc<T extends THREE.MeshStandardMaterial>(mat: T, surface: Surf
           #elif ${surface} == 3
             c *= 0.75 + 0.5 * n1;
             c = mix(c, vec3(0.12, 0.14, 0.12), smoothstep(0.6, 0.75, n2) * 0.6);   // moss on the roof
-          #elif ${surface} == 4
-            wet = smoothstep(0.5, 0.58, fbm(vec3(vWPos.x, 0.0, vWPos.z) * 0.0065 + 3.1));
-            c *= 0.85 + 0.3 * fbm(P * 0.3);
-            c = mix(c, c * vec3(0.75, 0.72, 0.65), smoothstep(0.45, 0.7, fbm(P * 0.07)));  // dirt patches
-            c = mix(c, c * 0.5, wet);
           #elif ${surface} == 5
             c *= 0.7 + 0.5 * step(0.5, fract(vWPos.x * 0.25 + vWPos.z * 0.25));
             c = mix(c, vec3(0.6, 0.6, 0.6), edge * 0.4);

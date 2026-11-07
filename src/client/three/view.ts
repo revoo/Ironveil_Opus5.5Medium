@@ -368,7 +368,24 @@ export class MissionView3D {
     this.d.audio.setChargeHum(0);
     this.d.audio.setMood('menu');
     this.d.audio.setScene('menu');
+    // Free GPU memory and the WebGL context itself; otherwise every retry leaks a context
+    // (browsers cap them at ~16) along with shadow maps and post-processing buffers.
+    this.composer.dispose();
+    this.gtao.dispose();
+    this.bloom.dispose();
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose();
+      const mats = (Array.isArray(m.material) ? m.material : m.material ? [m.material] : []) as THREE.Material[];
+      for (const mat of mats) {
+        for (const v of Object.values(mat)) if (v instanceof THREE.Texture) v.dispose();
+        mat.dispose();
+      }
+      if ((o as THREE.Light).isLight) (o as THREE.DirectionalLight).shadow?.dispose();
+    });
+    this.scene.environment?.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.hud.dispose();
     this.minimap.remove();
