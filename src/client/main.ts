@@ -34,7 +34,10 @@ const game = new Phaser.Game({
 game.scene.add('game', GameScene, false);
 game.scene.add('hud', HudScene, false);
 input.attach(document.body);
-(window as unknown as { __ironveil: unknown }).__ironveil = { game, hud: () => hud, settings, mission: () => activeMission() };
+// Browsers only allow audio after a gesture: the first click anywhere starts the menu score.
+document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+document.addEventListener('keydown', () => audio.unlock(), { once: true });
+(window as unknown as { __ironveil: unknown }).__ironveil = { game, hud: () => hud, settings, audio, mission: () => activeMission() };
 
 /** The active 3D mission view, if a mission is running. */
 let view3d: MissionView3D | null = null;
@@ -113,6 +116,8 @@ function wireSeg(root: HTMLElement, name: string, onPick: (v: string) => void): 
 
 function mainMenu(): void {
   inMatch = false;
+  audio.setScene('menu');
+  audio.setMood('menu');
   const m = MISSIONS[0]!.mission;
   const d = screen(`
     <div class="card">
@@ -187,7 +192,7 @@ function settingsScreen(back: () => void): void {
       <h2>Settings</h2>
       <div class="row"><label>Master volume</label><input type="range" min="0" max="1" step="0.05" id="master" value="${settings.master}"></div>
       <div class="row"><label>Effects volume</label><input type="range" min="0" max="1" step="0.05" id="sfx" value="${settings.sfx}"></div>
-      <div class="row"><label>Ambience</label><input type="range" min="0" max="1" step="0.05" id="music" value="${settings.music}"></div>
+      <div class="row"><label>Music</label><input type="range" min="0" max="1" step="0.05" id="music" value="${settings.music}"></div>
       <div class="row"><label>Text size</label>${seg('text', [['0.85', 'Small'], ['1', 'Normal'], ['1.2', 'Large'], ['1.4', 'Huge']], String(settings.textScale))}</div>
       <div class="row"><label>Reduced motion</label>${seg('rm', [['0', 'Off'], ['1', 'On']], settings.reducedMotion ? '1' : '0')} <span class="muted small">no camera shake/kick, calmer smoke</span></div>
       <div class="row"><label>Effects quality</label>${seg('fx', [['0', 'High'], ['1', 'Low']], settings.lowEffects ? '1' : '0')} <span class="muted small">fewer particles & lights; never changes visibility</span></div>
@@ -301,6 +306,8 @@ function startMatch(training = lastTraining): void {
   lastTraining = training;
   currentMission = null;
   closeView3d();
+  audio.setScene('skirmish');
+  audio.setMood('tension', 0.4);
   audio.unlock();
   hud = newHudModel();
   (window as unknown as { __ironveil: { hud: () => HudModel } }).__ironveil.hud = () => hud;
@@ -465,7 +472,6 @@ window.addEventListener('keydown', (e) => {
   const n = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code);
   if (n >= 0) {
     ms.choose(n % 3);
-    audio.click();
   }
 });
 

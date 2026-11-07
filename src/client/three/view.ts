@@ -111,6 +111,15 @@ export class MissionView3D {
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private listeners: (() => void)[] = [];
+  // audio direction state
+  private heardRadio = new Set<string>();
+  private noticeCount = 0;
+  private hadChoice = false;
+  private lastDet = 0;
+  private lastCombat = -1e9;
+  private moodSent = '';
+  private tensionSent = -1;
+  private outcomeSounded = false;
 
   constructor(
     private container: HTMLElement,
@@ -209,6 +218,11 @@ export class MissionView3D {
 
     this.buildComposer();
     this.resize();
+    d.audio.setScene('mission');
+    d.audio.setMood('calm');
+    // lines already on the radio at construction (e.g. after a checkpoint) are not replayed
+    for (const r of this.session.radio) this.heardRadio.add(`${r.tick}|${r.from}|${r.text}`);
+    this.noticeCount = this.session.notices.length;
     this.raf = requestAnimationFrame((t) => this.frame(t));
   }
 
@@ -352,6 +366,8 @@ export class MissionView3D {
     this.listeners.forEach((f) => f());
     this.d.audio.setEngine(0, false, false);
     this.d.audio.setChargeHum(0);
+    this.d.audio.setMood('menu');
+    this.d.audio.setScene('menu');
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.hud.dispose();
@@ -426,11 +442,63 @@ export class MissionView3D {
     this.d.audio.setEngine(me ? Math.hypot(me.vx, me.vy) : 0, !!me?.alive && !s.paused, !!me?.quiet);
     this.d.audio.setChargeHum(me && me.phase === 'charging' && !s.paused ? me.charge : 0);
     this.hud.update(cur, me, this.mousePx, (x, y, h) => this.project(x, y, h), dt);
+    this.directAudio(now);
     this.renderMinimap(cur, selfPos);
 
     if (s.outcome && !this.ended) {
       this.ended = true;
       setTimeout(() => !this.disposed && this.d.onEnd(s), 2600);
+    }
+  }
+
+  // ------------------------------------------------------------------ audio direction
+  /** The score, stingers, radio and UI sounds follow the mission state. */
+  private directAudio(now: number): void {
+    const s = this.session;
+    const a = this.d.audio;
+    if (s.paused) return;
+    // radio: every new subtitle line gets squelch, static and murmur
+    for (const r of s.radio) {
+      const key = `${r.tick}|${r.from}|${r.text}`;
+      if (this.heardRadio.has(key)) continue;
+      this.heardRadio.add(key);
+      a.radioLine(r.from, r.text, r.from.endsWith('(enemy)'));
+    }
+    // notices: checkpoint and objective stingers
+    while (this.noticeCount < s.notices.length) {
+      const n = s.notices[this.noticeCount++]!.text;
+      if (n === 'Checkpoint') a.stinger('checkpoint');
+      else if (/^(New objective|Objective complete)/.test(n)) a.stinger('objective');
+    }
+    if (s.notices.length < this.noticeCount) this.noticeCount = s.notices.length;
+    // decisions
+    if (!!s.choice !== this.hadChoice) {
+      if (s.choice) a.choiceOpen();
+      else a.choiceSelect();
+      this.hadChoice = !!s.choice;
+    }
+    // outcome
+    if (s.outcome) {
+      if (!this.outcomeSounded) {
+        this.outcomeSounded = true;
+        a.stinger(s.outcome.result === 'success' ? 'success' : 'failure');
+        a.setMood('silent');
+      }
+      return;
+    }
+    // detection -> mood
+    const det = s.detection();
+    if (det >= 1) {
+      if (now - this.lastCombat > 10000 && this.lastDet < 1) a.stinger('spotted');
+      this.lastCombat = now;
+    } else if (det > 0.25 && this.lastDet <= 0.25) a.suspicion(det);
+    this.lastDet = det;
+    const mood = now - this.lastCombat < 8000 ? 'combat' : det > 0.05 || s.simple.alarmRaised ? 'tension' : 'calm';
+    const tension = mood === 'tension' ? Math.max(det, s.simple.alarmRaised ? 0.5 : 0) : det;
+    if (mood !== this.moodSent || Math.abs(tension - this.tensionSent) > 0.08) {
+      this.moodSent = mood;
+      this.tensionSent = tension;
+      a.setMood(mood, tension);
     }
   }
 
