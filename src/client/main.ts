@@ -426,7 +426,7 @@ document.body.appendChild(missionEl);
 let missionHtml = '';
 function renderMissionHud(): void {
   requestAnimationFrame(renderMissionHud);
-  const ms = activeMission();
+  const ms = view3d ? null : activeMission(); // the 3D view draws its own HUD
   if (!ms || !inMatch || ms.outcome) {
     if (missionHtml) missionEl.innerHTML = missionHtml = '';
     return;

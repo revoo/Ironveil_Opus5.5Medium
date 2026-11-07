@@ -82,31 +82,7 @@ input[type='range'] { width: 220px; accent-color: #a5b88d; }
 
 /* ---- 3D mission view ---- */
 #view3d-host { display: none; position: fixed; inset: 0; z-index: 1; background: #05080a; overflow: hidden; }
-#view3d-host canvas.view3d { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: crosshair; }
-.hud3d { position: absolute; inset: 0; pointer-events: none; font-family: Rajdhani, 'Segoe UI', system-ui, sans-serif; color: #edf4df; }
-.hud3d .radio { position: absolute; left: 20px; bottom: 128px; width: min(620px, 60vw); display: flex; flex-direction: column; gap: 3px; }
-.hud3d .radio .line { font-size: 19px; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
-.hud3d .radio .line b { font-weight: 700; margin-right: 6px; }
-.hud3d .radio .crew { color: #cfeedd; } .hud3d .radio .crew b { color: #a8e6c8; }
-.hud3d .radio .enemy { color: #ffcdb5; font-size: 16px; } .hud3d .radio .enemy b { color: #ffb38f; }
-.hud3d .panel { position: absolute; left: 20px; bottom: 20px; width: 330px; background: rgba(16, 27, 23, 0.8); border: 1px solid #2c4236; padding: 10px 12px; display: grid; gap: 6px; }
-.hud3d .vrow { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.hud3d .vrow label { width: 64px; color: #a4b6a4; letter-spacing: 0.1em; font-size: 12px; }
-.hud3d .hp { display: flex; gap: 3px; flex: 1; } .hud3d .hp i { flex: 1; height: 12px; background: #1d3024; } .hud3d .hp i.on { background: #87c9e8; }
-.hud3d .cannon { flex: 1; display: flex; align-items: center; gap: 8px; }
-.hud3d .cannon .charge { flex: 1; height: 10px; background: linear-gradient(90deg, #f1d09c var(--c), #1d3024 var(--c)); }
-.hud3d .cannon em { font-style: normal; font-weight: 700; letter-spacing: 0.08em; color: #edf4df; }
-.hud3d .cannon em.ok { color: #a5d8a0; } .hud3d .cannon em.bad { color: #ff9177; }
-.hud3d .chips { gap: 6px; flex-wrap: wrap; } .hud3d .chip { font-size: 11px; letter-spacing: 0.08em; padding: 3px 7px; border: 1px solid #2c4236; color: #a4b6a4; }
-.hud3d .chip.on { color: #edf4df; border-color: #87c9e8; }
-.hud3d .destroyed { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); font-size: 64px; font-weight: 700; color: #ff8a6a; letter-spacing: 0.1em; text-shadow: 0 2px 12px #000; }
-.hud3d .hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: #c8d4c4; font-size: 15px; text-shadow: 0 1px 3px #000; white-space: nowrap; }
-.minimap3d { position: absolute; top: 18px; right: 18px; border: 1px solid #2c4236; background: #0c1310; pointer-events: none; }
-.markers3d { position: absolute; inset: 0; pointer-events: none; }
-.markers3d .mk { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: Rajdhani, system-ui, sans-serif; }
-.markers3d .mk span { font-size: 28px; font-weight: 700; line-height: 1; text-shadow: 0 0 6px #000, 0 1px 2px #000; }
-.markers3d .mk i { display: block; height: 4px; background: #f1d09c; min-width: 2px; max-width: 36px; }
-.markers3d .mk.sus span { color: #f1d09c; } .markers3d .mk.combat span { color: #ff5a3a; } .markers3d .mk.boss span { color: #ff9177; font-size: 22px; }
+#view3d-host canvas.view3d { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: none; }
 /* the mission overlay sits above the 3D view */
 #mission-hud { z-index: 6; }
 #view3d-host ~ #mission-hud .objectives { top: 150px; }
@@ -120,3 +96,121 @@ details.skirmish summary { cursor: pointer; color: #a4b6a4; font-size: 15px; let
 details.skirmish[open] summary { margin-bottom: 8px; }
 /* In the 3D view the camera keeps the tank centred: keep decisions out of the middle of the screen. */
 #view3d-host ~ #mission-hud .choice { left: auto; right: 18px; bottom: 20px; transform: none; width: min(440px, 44vw); }
+
+/* ================================================================ 3D mission HUD
+   No boxes: text floats over the scene on soft scrims; the cannon state rides on the cursor. */
+.h3 { --ink: #edf4df; --dim: #9fb09f; --amber: #f1d09c; --steel: #87c9e8; --rust: #ff9177; --red: #ff5a3a; --green: #a5d8a0;
+  --sh: 0 1px 2px rgba(0,0,0,.95), 0 0 14px rgba(0,0,0,.55);
+  position: absolute; inset: 0; pointer-events: none; color: var(--ink); font-family: Rajdhani, 'Segoe UI', system-ui, sans-serif; text-shadow: var(--sh); }
+.h3 kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid rgba(237,244,223,.35); border-bottom-width: 2px; border-radius: 4px;
+  font: 700 12px/1 Rajdhani, system-ui, sans-serif; color: var(--ink); background: rgba(10,16,14,.45); text-shadow: none; }
+.h3-scrim { position: absolute; width: 46vw; height: 42vh; pointer-events: none; }
+.h3-scrim.tl { left: 0; top: 0; background: radial-gradient(ellipse at 0 0, rgba(4,8,7,.62), rgba(4,8,7,0) 62%); }
+.h3-scrim.bl { left: 0; bottom: 0; background: radial-gradient(ellipse at 0 100%, rgba(4,8,7,.7), rgba(4,8,7,0) 64%); }
+
+/* objectives */
+.h3-obj { position: absolute; left: 26px; top: 20px; width: 320px; }
+.h3-op { font-size: 11px; letter-spacing: .34em; text-transform: uppercase; color: var(--dim); }
+.h3-title { font-family: 'Stardos Stencil', Rajdhani, sans-serif; font-size: 27px; line-height: 1.05; color: var(--amber); letter-spacing: .04em; margin: 2px 0 8px; }
+.h3-obj ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.h3-obj li { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 600; transition: opacity .6s; }
+.h3-obj li i { flex: none; width: 7px; height: 7px; border: 1.5px solid var(--amber); transform: rotate(45deg); }
+.h3-obj li small { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); border: 1px solid rgba(159,176,159,.4); padding: 1px 5px; border-radius: 3px; text-shadow: none; }
+.h3-obj li.complete { opacity: .5; } .h3-obj li.complete span { text-decoration: line-through; text-decoration-color: rgba(165,216,160,.7); }
+.h3-obj li.complete i { background: var(--green); border-color: var(--green); }
+.h3-obj li.failed { color: var(--rust); opacity: .7; } .h3-obj li.failed i { background: var(--rust); border-color: var(--rust); }
+
+/* detection */
+.h3-det { position: absolute; top: 18px; left: 50%; width: 190px; margin-left: -95px; text-align: center; transition: opacity .4s; }
+.h3-det .lbl { font-size: 12px; font-weight: 700; letter-spacing: .36em; text-transform: uppercase; padding-left: .36em; }
+.h3-det .track { height: 2px; margin-top: 4px; background: rgba(237,244,223,.14); overflow: hidden; }
+.h3-det .track i { display: block; height: 100%; background: currentColor; transform-origin: 0 50%; transform: scaleX(0); transition: transform .12s linear; }
+.h3-det[data-s="hidden"] { opacity: .45; color: var(--green); }
+.h3-det[data-s="suspicious"] { color: var(--amber); }
+.h3-det[data-s="alert"] { color: #ffb36a; }
+.h3-det[data-s="spotted"] { color: var(--red); animation: h3pulse .9s ease-in-out infinite; }
+@keyframes h3pulse { 50% { opacity: .55; } }
+
+/* toasts */
+.h3-toasts { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; }
+.h3 .toast { font-size: 14px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--amber); display: flex; align-items: center; gap: 12px;
+  animation: h3toast 3.5s ease forwards; white-space: nowrap; }
+.h3 .toast::before, .h3 .toast::after { content: ''; width: 34px; height: 1px; background: currentColor; opacity: .6; }
+@keyframes h3toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* radio subtitles */
+.h3-radio { position: absolute; left: 26px; bottom: 74px; width: min(560px, 52vw); }
+.h3-radio p { margin: 0 0 7px; font-size: 18px; font-weight: 500; line-height: 1.3; animation: h3in .25s ease; }
+.h3-radio .who { display: inline-block; margin-right: 9px; font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; vertical-align: 1px; }
+.h3-radio .crew .who { color: #a8e6c8; }
+.h3-radio .int { font-family: 'Share Tech Mono', ui-monospace, monospace; font-size: 14px; color: #ffc4aa; opacity: .9; }
+.h3-radio .int .who { font-family: Rajdhani, system-ui, sans-serif; color: var(--rust); font-size: 11px; }
+@keyframes h3in { from { opacity: 0; transform: translateX(-6px); } }
+
+/* vehicle status */
+.h3-status { position: absolute; left: 26px; bottom: 24px; display: flex; align-items: center; gap: 22px; }
+.h3-status .hull { display: flex; align-items: center; gap: 10px; }
+.h3-status .cap { font-size: 11px; letter-spacing: .32em; text-transform: uppercase; color: var(--dim); }
+.h3-status .segs { display: flex; gap: 3px; }
+.h3-status .segs b { width: 14px; height: 9px; transform: skewX(-22deg); background: rgba(237,244,223,.1); box-shadow: 0 0 0 1px rgba(0,0,0,.35); transition: background .2s; }
+.h3-status .segs b.on { background: var(--steel); }
+.h3-status.low .segs b.on { background: var(--rust); animation: h3pulse 1s ease-in-out infinite; }
+.h3-status .num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 34px; }
+.h3-status .chips { display: flex; gap: 14px; }
+.h3 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); opacity: .45; transition: opacity .2s, color .2s; }
+.h3 .chip svg { width: 17px; height: 17px; fill: currentColor; stroke: currentColor; stroke-width: 0; filter: drop-shadow(0 1px 2px #000); }
+.h3 .chip.silent svg path + path { stroke-width: 2; stroke-linecap: round; }
+.h3 .chip em { font-style: normal; }
+.h3 .chip.smoke.ready, .h3 .chip.on { opacity: 1; color: var(--ink); }
+.h3 .chip.brush.on { color: var(--green); }
+.h3 .chip.silent.on { color: var(--steel); }
+
+/* decisions */
+.h3-choice { position: absolute; right: 26px; bottom: 24px; width: 350px; padding: 14px 16px 12px; text-shadow: none;
+  background: linear-gradient(160deg, rgba(14,22,19,.9), rgba(9,14,12,.78)); border-left: 2px solid var(--amber); box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  backdrop-filter: blur(6px); opacity: 0; transform: translateY(10px); transition: opacity .25s, transform .25s; }
+.h3-choice.show { opacity: 1; transform: none; }
+.h3-choice .timer { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: rgba(241,208,156,.15); }
+.h3-choice .timer i { display: block; height: 100%; background: var(--amber); transform-origin: 0 50%; }
+.h3-choice.urgent .timer i { background: var(--rust); }
+.h3-choice .who { font-size: 11px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--dim); }
+.h3-choice .prompt { font-size: 21px; font-weight: 700; margin: 3px 0 9px; }
+.h3-choice .opt { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; padding: 4px 0; }
+.h3-choice .opt.def span::after { content: 'default'; margin-left: 8px; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+
+/* cursor */
+.h3-cursor { position: absolute; left: 0; top: 0; width: 48px; height: 48px; margin: -24px 0 0 -24px; will-change: transform; }
+.h3-cursor svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
+.h3-cursor .trk { fill: none; stroke: rgba(237,244,223,.2); stroke-width: 2; }
+.h3-cursor .arc { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; transition: stroke .15s, stroke-width .15s; }
+.h3-cursor .tick { stroke: rgba(237,244,223,.75); stroke-width: 1.5; }
+.h3-cursor .dot { fill: var(--ink); }
+.h3-cursor[data-m="reload"] .arc { stroke: var(--dim); }
+.h3-cursor[data-m="charging"] .arc { stroke: var(--amber); stroke-width: 3; }
+.h3-cursor[data-m="hold"] .arc { stroke: var(--amber); stroke-width: 3.5; }
+.h3-cursor[data-m="hold"] svg { animation: h3beat .5s ease-in-out infinite; }
+.h3-cursor[data-m="venting"] .arc, .h3-cursor[data-m="vented"] .arc { stroke: var(--red); stroke-width: 3.5; }
+.h3-cursor[data-m="venting"] svg { animation: h3beat .22s ease-in-out infinite; }
+@keyframes h3beat { 50% { transform: scale(1.12); } }
+
+/* enemy markers */
+.h3-markers .mk { position: absolute; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; display: grid; place-items: center; }
+.h3-markers .mk svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.h3-markers .mk .t { fill: rgba(4,8,7,.45); stroke: rgba(0,0,0,.35); stroke-width: 2.5; }
+.h3-markers .mk .a { fill: none; stroke: var(--amber); stroke-width: 2.5; stroke-linecap: round; }
+.h3-markers .mk span { position: relative; font-size: 17px; font-weight: 700; line-height: 1; }
+.h3-markers .sus span { color: var(--amber); }
+.h3-markers .combat::before { content: ''; position: absolute; width: 18px; height: 18px; background: var(--red); transform: rotate(45deg); box-shadow: 0 0 12px rgba(255,90,58,.7); }
+.h3-markers .combat span { color: #fff; font-size: 15px; text-shadow: none; }
+.h3-markers .boss span { color: var(--rust); font-size: 20px; }
+
+/* misc */
+.h3-lost { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: 'Stardos Stencil', Rajdhani, sans-serif; font-size: 64px; letter-spacing: .12em; color: var(--rust); opacity: 0; transition: opacity .6s; }
+.h3.dead .h3-lost { opacity: 1; }
+.h3.dead .h3-status, .h3.dead .h3-cursor, .h3.ended .h3-cursor, .h3.ended .h3-choice, .h3.ended .h3-hint { display: none; }
+.h3-hint { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); display: flex; gap: 18px; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--dim); transition: opacity .4s; }
+.h3-hint span { display: inline-flex; align-items: center; gap: 5px; }
+.h3-hint kbd { min-width: 18px; height: 18px; font-size: 11px; }
+.minimap3d { position: absolute; top: 22px; right: 22px; pointer-events: none; border: 1px solid rgba(237,244,223,.16); border-radius: 3px; opacity: .9; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+@media (max-width: 1100px) { .h3-hint { display: none; } .h3-radio { bottom: 70px; } }
+@media (prefers-reduced-motion: reduce) { .h3 * { animation: none !important; transition: none !important; } }

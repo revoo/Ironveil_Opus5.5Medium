@@ -24,6 +24,7 @@ import { buildEnvironment, procUniforms } from './materials';
 import { buildTank, radialTexture, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
 import { CueArcs, Decals, Flashes, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
+import { Hud3D } from './hud';
 
 export interface MissionViewDeps {
   session: MissionSession;
@@ -91,26 +92,24 @@ export class MissionView3D {
   private smoke: SmokeFx;
   private flashes: Flashes;
   private arcs: CueArcs;
-  private reticle: THREE.Mesh;
   private barrelMark: THREE.Mesh;
   private camTarget = new THREE.Vector3();
   private zoom = 1;
   private shake = 0;
   private hurt = 0;
   private mouse = { x: 0, y: 0 };
+  private mousePx = { x: -100, y: -100 };
   private aim: Vec = { x: 0, y: 0 };
   private raf = 0;
   private last = performance.now();
   private ended = false;
   private disposed = false;
   private lampFlick = 1;
-  private hud: HTMLDivElement;
+  private hud: Hud3D;
   private minimap: HTMLCanvasElement;
   private miniBase: HTMLCanvasElement;
-  private markers: HTMLDivElement;
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  private hint = 0;
   private listeners: (() => void)[] = [];
 
   constructor(
@@ -175,24 +174,16 @@ export class MissionView3D {
       scene.add(ring);
       this.ghosts.push(ring);
     }
-    this.reticle = new THREE.Mesh(new THREE.RingGeometry(9, 11, 32), new THREE.MeshBasicMaterial({ color: 0xe8f0e0, transparent: true, opacity: 0.8, depthTest: false }));
-    this.reticle.rotation.x = -Math.PI / 2;
-    this.reticle.renderOrder = 10;
     this.barrelMark = new THREE.Mesh(new THREE.RingGeometry(4, 6, 24), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, depthTest: false }));
     this.barrelMark.rotation.x = -Math.PI / 2;
     this.barrelMark.renderOrder = 10;
-    scene.add(this.reticle, this.barrelMark);
+    scene.add(this.barrelMark);
 
     const me = this.session.world.tank(this.session.playerId);
     this.camTarget.set(me.pos.x, 0, me.pos.y);
 
     // ---- DOM: vehicle panel, radio, minimap, enemy alert markers
-    this.hud = document.createElement('div');
-    this.hud.className = 'hud3d';
-    container.appendChild(this.hud);
-    this.markers = document.createElement('div');
-    this.markers.className = 'markers3d';
-    container.appendChild(this.markers);
+    this.hud = new Hud3D(container, this.session);
     this.minimap = document.createElement('canvas');
     this.minimap.className = 'minimap3d';
     container.appendChild(this.minimap);
@@ -201,6 +192,7 @@ export class MissionView3D {
     const onMove = (e: MouseEvent) => {
       const r = this.renderer.domElement.getBoundingClientRect();
       this.mouse = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
+      this.mousePx = { x: e.clientX - r.left, y: e.clientY - r.top };
     };
     const onWheel = (e: WheelEvent) => {
       this.zoom = Math.min(2.2, Math.max(0.6, this.zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
@@ -261,8 +253,8 @@ export class MissionView3D {
     this.composer.setSize(w, h);
     this.bloom.resolution.set((w * dpr) / 2, (h * dpr) / 2);
     (this.grade.uniforms.uRes as { value: THREE.Vector2 }).value.set(w * dpr, h * dpr);
-    this.minimap.width = 220;
-    this.minimap.height = Math.round((220 * this.world.height) / this.world.width);
+    this.minimap.width = 196;
+    this.minimap.height = Math.round((196 * this.world.height) / this.world.width);
   }
 
   private drawMiniBase(): HTMLCanvasElement {
@@ -362,9 +354,8 @@ export class MissionView3D {
     this.d.audio.setChargeHum(0);
     this.renderer.dispose();
     this.renderer.domElement.remove();
-    this.hud.remove();
+    this.hud.dispose();
     this.minimap.remove();
-    this.markers.remove();
   }
 
   // ------------------------------------------------------------------ frame
@@ -434,8 +425,7 @@ export class MissionView3D {
     const me = cur.tanks.find((x) => x.id === s.playerId);
     this.d.audio.setEngine(me ? Math.hypot(me.vx, me.vy) : 0, !!me?.alive && !s.paused, !!me?.quiet);
     this.d.audio.setChargeHum(me && me.phase === 'charging' && !s.paused ? me.charge : 0);
-    this.renderHud(cur, me, dt);
-    this.renderMarkers(cur);
+    this.hud.update(cur, me, this.mousePx, (x, y, h) => this.project(x, y, h), dt);
     this.renderMinimap(cur, selfPos);
 
     if (s.outcome && !this.ended) {
@@ -536,7 +526,6 @@ export class MissionView3D {
   }
 
   private renderReticle(cur: Observation, selfPos: Vec | null): void {
-    this.reticle.position.set(this.aim.x, 2, this.aim.y);
     const me = cur.tanks.find((t) => t.id === this.session.playerId);
     this.barrelMark.visible = !!me && !!selfPos;
     if (me && selfPos) {
@@ -592,71 +581,6 @@ export class MissionView3D {
     }
   }
 
-  // ------------------------------------------------------------------ DOM HUD
-  private hudHtml = '';
-  private renderHud(cur: Observation, me: TankView | undefined, dt: number): void {
-    const s = this.session;
-    const tick = cur.tick;
-    const radio = s.radio
-      .filter((r) => tick - r.tick < 30 * 9)
-      .slice(-5)
-      .map((r) => {
-        const enemy = r.from.endsWith('(enemy)');
-        const age = (tick - r.tick) / 30;
-        const op = age > 8 ? 1 - (age - 8) : 1;
-        return `<div class="line ${enemy ? 'enemy' : 'crew'}" style="opacity:${op.toFixed(2)}"><b>${esc(enemy ? '⟂ ' + r.from.replace(' (enemy)', '') : r.from)}</b> ${esc(r.text)}</div>`;
-      })
-      .join('');
-    let panel = '';
-    if (me) {
-      const hp = Math.max(0, me.hp);
-      const segs = Array.from({ length: 10 }, (_, i) => `<i class="${hp > i * 10 ? 'on' : ''}"></i>`).join('');
-      const w = me.phase;
-      const cannon =
-        w === 'charging' ? `<span class="charge" style="--c:${Math.round(me.charge * 100)}%"></span><em>${me.hold !== null ? 'HOLD' : 'CHARGING'}</em>` : w === 'ready' ? '<em class="ok">READY</em>' : w === 'reloading' ? '<em>RELOADING</em>' : w === 'vent' ? '<em class="bad">VENTED</em>' : '<em>…</em>';
-      const smokeLeft = Math.max(0, (me.smokeReadyTick - tick) / 30);
-      panel = `<div class="panel">
-        <div class="vrow"><label>HULL</label><div class="hp">${segs}</div><span>${hp}</span></div>
-        <div class="vrow"><label>CANNON</label><div class="cannon">${cannon}</div></div>
-        <div class="vrow chips"><span class="chip ${smokeLeft <= 0 ? 'on' : ''}">SMOKE ${smokeLeft > 0 ? smokeLeft.toFixed(0) + 's' : '[Q]'}</span><span class="chip ${me.quiet ? 'on' : ''}">${me.quiet ? 'SILENT' : 'ENGINE AUDIBLE'}</span>${me.inBrush ? '<span class="chip on">IN BRUSH</span>' : ''}</div>
-      </div>`;
-    } else panel = '<div class="destroyed">DESTROYED</div>';
-    this.hint += dt;
-    const hint = this.hint < 16 ? '<div class="hint">WASD drive (screen-relative) · mouse aim · hold Space to charge, release to fire · Q smoke · hold Shift silent · wheel zoom · Esc pause</div>' : '';
-    const html = `<div class="radio">${radio}</div>${panel}${hint}`;
-    if (html !== this.hudHtml) this.hud.innerHTML = this.hudHtml = html;
-  }
-
-  private markerHtml = '';
-  /** "?" / "!" over visible enemies, from the garrison AI's alert state (only for tanks you can see). */
-  private renderMarkers(cur: Observation): void {
-    const s = this.session;
-    let html = '';
-    for (const t of cur.tanks) {
-      if (t.team === cur.team || !t.alive) continue;
-      const st = s.simple.state(t.id);
-      const sus = s.simple.suspicion(t.id);
-      const isBoss = !s.simple.has(t.id);
-      const p = this.project(t.x, t.y, 70);
-      if (!p.on) continue;
-      let icon = '';
-      let cls = '';
-      if (isBoss) {
-        icon = '◆';
-        cls = 'boss';
-      } else if (st === 'combat') {
-        icon = '!';
-        cls = 'combat';
-      } else if (st === 'searching' || st === 'suspicious' || sus > 0.05) {
-        icon = '?';
-        cls = 'sus';
-      }
-      if (!icon) continue;
-      html += `<div class="mk ${cls}" style="left:${p.x.toFixed(0)}px;top:${p.y.toFixed(0)}px"><span>${icon}</span>${!isBoss && st !== 'combat' ? `<i style="width:${Math.round(sus * 100)}%"></i>` : ''}</div>`;
-    }
-    if (html !== this.markerHtml) this.markers.innerHTML = this.markerHtml = html;
-  }
-
   private renderMinimap(cur: Observation, selfPos: Vec | null): void {
     const ctx = this.minimap.getContext('2d')!;
     const W = this.minimap.width, H = this.minimap.height;
@@ -703,8 +627,4 @@ export class MissionView3D {
     ctx.closePath();
     ctx.stroke();
   }
-}
-
-function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
