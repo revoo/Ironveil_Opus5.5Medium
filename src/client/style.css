@@ -13,7 +13,7 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
 #game { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
 #game canvas { display: block; }
-#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 .screen {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   pointer-events: auto; background: radial-gradient(ellipse at 50% 30%, rgba(60, 78, 64, 0.35), rgba(8, 13, 11, 0.95) 70%);
@@ -79,3 +79,44 @@ input[type='range'] { width: 220px; accent-color: #a5b88d; }
 #mission-hud .choice .timer { height: 4px; background: #2c4236; margin-top: 8px; }
 #mission-hud .choice .timer span { display: block; height: 100%; background: #f1d09c; }
 .brief { color: #c8d4c4; max-width: 62ch; }
+
+/* ---- 3D mission view ---- */
+#view3d-host { display: none; position: fixed; inset: 0; z-index: 1; background: #05080a; overflow: hidden; }
+#view3d-host canvas.view3d { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: crosshair; }
+.hud3d { position: absolute; inset: 0; pointer-events: none; font-family: Rajdhani, 'Segoe UI', system-ui, sans-serif; color: #edf4df; }
+.hud3d .radio { position: absolute; left: 20px; bottom: 128px; width: min(620px, 60vw); display: flex; flex-direction: column; gap: 3px; }
+.hud3d .radio .line { font-size: 19px; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+.hud3d .radio .line b { font-weight: 700; margin-right: 6px; }
+.hud3d .radio .crew { color: #cfeedd; } .hud3d .radio .crew b { color: #a8e6c8; }
+.hud3d .radio .enemy { color: #ffcdb5; font-size: 16px; } .hud3d .radio .enemy b { color: #ffb38f; }
+.hud3d .panel { position: absolute; left: 20px; bottom: 20px; width: 330px; background: rgba(16, 27, 23, 0.8); border: 1px solid #2c4236; padding: 10px 12px; display: grid; gap: 6px; }
+.hud3d .vrow { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.hud3d .vrow label { width: 64px; color: #a4b6a4; letter-spacing: 0.1em; font-size: 12px; }
+.hud3d .hp { display: flex; gap: 3px; flex: 1; } .hud3d .hp i { flex: 1; height: 12px; background: #1d3024; } .hud3d .hp i.on { background: #87c9e8; }
+.hud3d .cannon { flex: 1; display: flex; align-items: center; gap: 8px; }
+.hud3d .cannon .charge { flex: 1; height: 10px; background: linear-gradient(90deg, #f1d09c var(--c), #1d3024 var(--c)); }
+.hud3d .cannon em { font-style: normal; font-weight: 700; letter-spacing: 0.08em; color: #edf4df; }
+.hud3d .cannon em.ok { color: #a5d8a0; } .hud3d .cannon em.bad { color: #ff9177; }
+.hud3d .chips { gap: 6px; flex-wrap: wrap; } .hud3d .chip { font-size: 11px; letter-spacing: 0.08em; padding: 3px 7px; border: 1px solid #2c4236; color: #a4b6a4; }
+.hud3d .chip.on { color: #edf4df; border-color: #87c9e8; }
+.hud3d .destroyed { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); font-size: 64px; font-weight: 700; color: #ff8a6a; letter-spacing: 0.1em; text-shadow: 0 2px 12px #000; }
+.hud3d .hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: #c8d4c4; font-size: 15px; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+.minimap3d { position: absolute; top: 18px; right: 18px; border: 1px solid #2c4236; background: #0c1310; pointer-events: none; }
+.markers3d { position: absolute; inset: 0; pointer-events: none; }
+.markers3d .mk { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: Rajdhani, system-ui, sans-serif; }
+.markers3d .mk span { font-size: 28px; font-weight: 700; line-height: 1; text-shadow: 0 0 6px #000, 0 1px 2px #000; }
+.markers3d .mk i { display: block; height: 4px; background: #f1d09c; min-width: 2px; max-width: 36px; }
+.markers3d .mk.sus span { color: #f1d09c; } .markers3d .mk.combat span { color: #ff5a3a; } .markers3d .mk.boss span { color: #ff9177; font-size: 22px; }
+/* the mission overlay sits above the 3D view */
+#mission-hud { z-index: 6; }
+#view3d-host ~ #mission-hud .objectives { top: 150px; }
+
+/* ---- menu ---- */
+.mission-card { border: 1px solid #f1d09c; background: rgba(241, 208, 156, 0.06); padding: 12px 14px; margin: 10px 0 4px; }
+.mission-card .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #a4b6a4; }
+.mission-card .mtitle { font-size: 26px; font-weight: 700; color: #f1d09c; }
+details.skirmish { margin-top: 14px; border-top: 1px solid #2c4236; padding-top: 10px; }
+details.skirmish summary { cursor: pointer; color: #a4b6a4; font-size: 15px; letter-spacing: 0.04em; }
+details.skirmish[open] summary { margin-bottom: 8px; }
+/* In the 3D view the camera keeps the tank centred: keep decisions out of the middle of the screen. */
+#view3d-host ~ #mission-hud .choice { left: auto; right: 18px; bottom: 20px; transform: none; width: min(440px, 44vw); }

@@ -9,7 +9,8 @@ import type { Observation } from '../sim/observation';
 import type { PlayableSession } from '../game/playable';
 import type { Difficulty } from '../ai/personality';
 import { MissionSession, type Checkpoint } from '../game/mission/session';
-import { MISSIONS } from '../content/missions';
+import { MISSIONS, missionById } from '../content/missions';
+import { MissionView3D } from './three/view';
 
 const settings: Settings = loadSettings();
 const input = new InputManager(settings);
@@ -33,7 +34,27 @@ const game = new Phaser.Game({
 game.scene.add('game', GameScene, false);
 game.scene.add('hud', HudScene, false);
 input.attach(document.body);
-(window as unknown as { __ironveil: unknown }).__ironveil = { game, hud: () => hud, settings };
+(window as unknown as { __ironveil: unknown }).__ironveil = { game, hud: () => hud, settings, mission: () => activeMission() };
+
+/** The active 3D mission view, if a mission is running. */
+let view3d: MissionView3D | null = null;
+const view3dHost = document.createElement('div');
+view3dHost.id = 'view3d-host';
+document.body.insertBefore(view3dHost, ui);
+
+function closeView3d(): void {
+  view3d?.dispose();
+  view3d = null;
+  view3dHost.style.display = 'none';
+  document.getElementById('game')!.style.visibility = '';
+}
+
+/** The running mission session, whichever view renders it. */
+function activeMission(): MissionSession | null {
+  if (view3d) return view3d.session;
+  const s = gameScene()?.session;
+  return s instanceof MissionSession ? s : null;
+}
 
 function gameScene(): GameScene | null {
   const s = game.scene.getScene('game') as GameScene | null;
@@ -92,21 +113,29 @@ function wireSeg(root: HTMLElement, name: string, onPick: (v: string) => void): 
 
 function mainMenu(): void {
   inMatch = false;
+  const m = MISSIONS[0]!.mission;
   const d = screen(`
     <div class="card">
       <h1>IRONVEIL</h1>
-      <div class="tag">Stealth tank team deathmatch · you and your squad versus tactical AI</div>
+      <div class="tag">A tank crew, a divided city, and a long night</div>
       <div class="row"><label>Callsign</label><input type="text" id="name" maxlength="14" value="${escapeHtml(settings.playerName)}"></div>
-      <div class="row"><label>Difficulty</label>${seg('diff', [['easy', 'Recruit'], ['normal', 'Veteran'], ['hard', 'Ironclad']], settings.difficulty)}</div>
-      <div class="row"><label>Team size</label>${seg('size', [['1', '1v1'], ['2', '2v2'], ['3', '3v3'], ['4', '4v4']], String(settings.teamSize))}</div>
+      <div class="mission-card">
+        <div class="eyebrow">Campaign · mission 0</div>
+        <div class="mtitle">${escapeHtml(m.title)}</div>
+        <div class="muted small">Stealth and combat through a checkpoint district, rendered in 3D.</div>
+      </div>
       <div class="actions">
-        <button class="primary" id="deploy">Deploy</button>
-        <button id="train">Training</button>
-        <button id="mission">Grey-box mission</button>
+        <button class="primary" id="mission">Play mission</button>
         <button id="how">How to play</button>
         <button id="settings">Settings</button>
       </div>
-      <div class="notice">Map: Relay Yard — Radio Tower, Depot, Foundry, Broken Bridge, Quarry Cut. First team to 15 kills wins.</div>
+      <details class="skirmish">
+        <summary>Skirmish · team deathmatch (2D, original mode)</summary>
+        <div class="row"><label>Difficulty</label>${seg('diff', [['easy', 'Recruit'], ['normal', 'Veteran'], ['hard', 'Ironclad']], settings.difficulty)}</div>
+        <div class="row"><label>Team size</label>${seg('size', [['1', '1v1'], ['2', '2v2'], ['3', '3v3'], ['4', '4v4']], String(settings.teamSize))}</div>
+        <div class="actions"><button id="deploy">Deploy</button><button id="train">Training</button></div>
+        <div class="notice">Map: Relay Yard. You and your squad against tactical AI; first team to 15 kills wins.</div>
+      </details>
     </div>`);
   wireSeg(d, 'diff', (v) => (settings.difficulty = v as Difficulty));
   wireSeg(d, 'size', (v) => (settings.teamSize = Number(v)));
@@ -187,6 +216,7 @@ function settingsScreen(back: () => void): void {
   wireSeg(d, 'fx', (v) => {
     settings.lowEffects = v === '1';
     gameScene()?.applySettings();
+    view3d?.applySettings();
   });
   wireSeg(d, 'radio', (v) => (settings.showRadio = v === '1'));
   d.querySelectorAll<HTMLButtonElement>('button.bind').forEach((btn) =>
@@ -214,10 +244,11 @@ function settingsScreen(back: () => void): void {
 
 function openPause(): void {
   const gs = gameScene();
-  if (!gs) return;
+  if (!gs && !view3d) return;
   paused = true;
   input.releaseAll();
-  gs.setPaused(true);
+  if (view3d) view3d.setPaused(true);
+  else gs!.setPaused(true);
   audio.setEngine(0, false, false);
   audio.setChargeHum(0);
   const d = screen(
@@ -242,8 +273,7 @@ function openPause(): void {
   d.querySelector('#retry')?.addEventListener('click', () => {
     clearUi();
     paused = false;
-    const ms = gameScene()?.session;
-    startMission(currentMission!, ms instanceof MissionSession ? ms.lastCheckpoint ?? undefined : undefined);
+    startMission(currentMission!, activeMission()?.lastCheckpoint ?? undefined);
   });
   d.querySelector('#set')!.addEventListener('click', () => settingsScreen(openPause));
   d.querySelector('#how')!.addEventListener('click', () => howTo(openPause));
@@ -253,12 +283,14 @@ function openPause(): void {
 function closePause(): void {
   paused = false;
   clearUi();
-  gameScene()?.setPaused(false);
+  if (view3d) view3d.setPaused(false);
+  else gameScene()?.setPaused(false);
 }
 
 function quitToMenu(): void {
   paused = false;
   currentMission = null;
+  closeView3d();
   game.scene.stop('hud');
   game.scene.stop('game');
   mainMenu();
@@ -268,6 +300,7 @@ let lastTraining = false;
 function startMatch(training = lastTraining): void {
   lastTraining = training;
   currentMission = null;
+  closeView3d();
   audio.unlock();
   hud = newHudModel();
   (window as unknown as { __ironveil: { hud: () => HudModel } }).__ironveil.hud = () => hud;
@@ -340,19 +373,24 @@ function startMission(id: string, checkpoint?: Checkpoint): void {
   inMatch = true;
   paused = false;
   currentMission = id;
-  const data: GameSceneData = {
-    cfg: { teamSize: 1, difficulty: settings.difficulty, playerName: settings.playerName },
-    settings,
-    input,
-    audio,
-    hud,
-    onEnd: showResults,
-    mission: checkpoint ? { id, checkpoint } : { id },
-  };
   game.scene.stop('hud');
   game.scene.stop('game');
-  game.scene.start('game', data);
-  game.scene.start('hud', { model: hud, settings });
+  closeView3d();
+  const entry = missionById(id)!;
+  const session = new MissionSession({ ...entry, seed: (Date.now() & 0xffff) + 1 });
+  if (checkpoint) session.loadCheckpoint(checkpoint);
+  document.getElementById('game')!.style.visibility = 'hidden';
+  view3dHost.style.display = 'block';
+  view3d = new MissionView3D(view3dHost, {
+    session,
+    input,
+    audio,
+    settings,
+    onEnd: (s) => {
+      inMatch = false;
+      missionResults(s);
+    },
+  });
 }
 
 function missionResults(s: MissionSession): void {
@@ -388,8 +426,8 @@ document.body.appendChild(missionEl);
 let missionHtml = '';
 function renderMissionHud(): void {
   requestAnimationFrame(renderMissionHud);
-  const ms = gameScene()?.session;
-  if (!(ms instanceof MissionSession) || !inMatch || ms.outcome) {
+  const ms = activeMission();
+  if (!ms || !inMatch || ms.outcome) {
     if (missionHtml) missionEl.innerHTML = missionHtml = '';
     return;
   }
@@ -422,8 +460,8 @@ function renderMissionHud(): void {
 }
 requestAnimationFrame(renderMissionHud);
 window.addEventListener('keydown', (e) => {
-  const ms = gameScene()?.session;
-  if (!(ms instanceof MissionSession) || !ms.choice || paused) return;
+  const ms = activeMission();
+  if (!ms || !ms.choice || paused) return;
   const n = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code);
   if (n >= 0) {
     ms.choose(n % 3);

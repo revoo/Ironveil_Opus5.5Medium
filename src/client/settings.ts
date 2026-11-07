@@ -56,7 +56,7 @@ export function defaultSettings(): Settings {
     textScale: 1,
     showRadio: true,
     difficulty: 'normal',
-    teamSize: 3,
+    teamSize: 2,
     playerName: 'You',
     bindings: structuredClone(DEFAULT_BINDINGS),
   };

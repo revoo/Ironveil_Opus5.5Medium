@@ -2,7 +2,7 @@
  "format": "ironveil-level",
  "formatVersion": 1,
  "id": "greybox-crossing",
- "version": 1,
+ "version": 2,
  "name": "Grey Box: The Crossing",
  "tile": 32,
  "terrain": [
@@ -199,6 +199,87 @@
  ],
  "props": [
   {
+   "kind": "lamp",
+   "x": 928,
+   "y": 448,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": 0
+  },
+  {
+   "kind": "lamp",
+   "x": 928,
+   "y": 672,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": 0
+  },
+  {
+   "kind": "lamp",
+   "x": 268,
+   "y": 544,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": -90
+  },
+  {
+   "kind": "lamp",
+   "x": 652,
+   "y": 544,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": -90
+  },
+  {
+   "kind": "lamp",
+   "x": 1420,
+   "y": 544,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": -90
+  },
+  {
+   "kind": "lamp",
+   "x": 1804,
+   "y": 544,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": -90
+  },
+  {
+   "kind": "lamp",
+   "x": 460,
+   "y": 600,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": 90
+  },
+  {
+   "kind": "lamp",
+   "x": 1228,
+   "y": 600,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": 90
+  },
+  {
+   "kind": "lamp",
+   "x": 1676,
+   "y": 600,
+   "w": 8,
+   "h": 8,
+   "height": 120,
+   "rotation": 90
+  },
+  {
    "kind": "barrier",
    "x": 992,
    "y": 480,
@@ -223,25 +304,41 @@
    "height": 22
   },
   {
-   "kind": "lamp",
-   "x": 928,
-   "y": 448,
-   "w": 8,
-   "h": 8,
-   "height": 120
+   "kind": "railcar",
+   "x": 1856,
+   "y": 800,
+   "w": 128,
+   "h": 64,
+   "height": 40
   },
   {
-   "kind": "lamp",
-   "x": 928,
-   "y": 672,
-   "w": 8,
-   "h": 8,
-   "height": 120
+   "kind": "barrel",
+   "x": 1152,
+   "y": 692,
+   "w": 14,
+   "h": 14,
+   "height": 22
+  },
+  {
+   "kind": "barrel",
+   "x": 1170,
+   "y": 698,
+   "w": 14,
+   "h": 14,
+   "height": 22
+  },
+  {
+   "kind": "barrier",
+   "x": 1856,
+   "y": 394,
+   "w": 128,
+   "h": 10,
+   "height": 24
   },
   {
    "kind": "railcar",
    "x": 1856,
-   "y": 800,
+   "y": 224,
    "w": 128,
    "h": 64,
    "height": 40
