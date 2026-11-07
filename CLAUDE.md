@@ -56,11 +56,27 @@ npm run dev         # http://localhost:5173
   Headless screenshots: Playwright + SwiftShader; the sim runs in slow motion there, so tests
   teleport the player via `__ironveil.mission().world.tank(0).pos`.
 
+## Cloud session limits (GitHub)
+
+- `git push` of branches works. Pushing tags and deleting branches are refused; the owner does those on GitHub.
+- `gh` REST calls work (ignore the misleading `gh auth status` failure). GraphQL is blocked, so
+  `gh pr create` fails: create PRs with `gh api repos/revoo/Ironveil_Opus5.5Medium/pulls -f title=… -f head=… -f base=main -f body=…`.
+
+## Preview builds (claude.ai artifacts)
+
+The owner tests through private claude.ai artifacts. Republish to the same URL after changes:
+- Game: https://claude.ai/artifact/UveMJUFVhBM6xfCTivZXxg — `npm run build`, then a page file with the
+  `<title>`, the Google Fonts link from `index.html`, the built CSS **inlined** in `<style>` (artifacts only
+  allow external stylesheets from Google Fonts), `<div id="game"></div><div id="ui"></div>`, and
+  `<script type="module" src="./assets/index-*.js">`; publish with the JS in `files` and `null` the old JS name.
+- Render Lab (2D/3D rendering demos, branch `archive/poc-render-tech`): https://claude.ai/artifact/1iKkufNjJtsaPUcDWmtPAr
+
 ## Status and next steps
 
 - `main` holds everything; work on short-lived branches off `main`. The Render Lab rendering
   experiment is preserved on the read-only branch `archive/poc-render-tech`; its code now lives
-  in `src/client/three/`.
+  in `src/client/three/`. Branches `poc/render-tech` and `campaign-foundation` are redundant and
+  awaiting deletion by the owner.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Planned: crew system phase 1, Ink dialogue, first real LDtk mission, recorded CC0 weapon/engine
   samples to replace the weakest synthesised SFX.
