@@ -75,8 +75,8 @@ The owner tests through private claude.ai artifacts. Republish to the same URL a
 
 - `main` holds everything; work on short-lived branches off `main`. The Render Lab rendering
   experiment is preserved on the read-only branch `archive/poc-render-tech`; its code now lives
-  in `src/client/three/`. Branches `poc/render-tech` and `campaign-foundation` are redundant and
-  awaiting deletion by the owner.
+  in `src/client/three/`. Merged fix branches (e.g. `fix/headlight-shader-recompile`) can be
+  deleted by the owner.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Planned: crew system phase 1, Ink dialogue, first real LDtk mission, recorded CC0 weapon/engine
   samples to replace the weakest synthesised SFX.
