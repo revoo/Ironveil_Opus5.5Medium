@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { World } from '../src/sim/world';
 import { TeamObserver } from '../src/sim/observation';
 import { neutralInput, type TankInput } from '../src/sim/types';
-import { SimpleController, type Posture } from '../src/ai/simple';
+import { BARK_LINES, SimpleController, type Posture } from '../src/ai/simple';
 import { mapWith, openMap } from './helpers';
 import type { GameMap } from '../src/sim/map';
 
@@ -83,5 +83,41 @@ describe('simple mission AI', () => {
     const { world, run } = setup(openMap(50, 20), { x: 500, y: 300 }, { x: 760, y: 300 });
     run(6);
     expect(world.tank(1).shotsFired).toBeGreaterThan(0);
+  });
+
+  describe('barks', () => {
+    it('calls out the spot and reloads, tagged with the speaker for the speech bubble', () => {
+      const { ai, run } = setup(openMap(50, 20), { x: 500, y: 300 }, { x: 760, y: 300 });
+      run(8);
+      const kinds = ai.barks.map((b) => b.kind);
+      expect(kinds).toContain('spotted');
+      expect(kinds).toContain('reloading');
+      for (const b of ai.barks) {
+        expect(b.unit).toBe(1);
+        expect(BARK_LINES[b.kind]).toContain(b.text);
+      }
+    });
+
+    it('a calm unit that is shot says it was hit', () => {
+      const { world, ai, run } = setup(openMap(60, 20), { x: 300, y: 300 }, { x: 1000, y: 300 }); // beyond sight, within cannon range
+      let fired = false;
+      run(3, () => {
+        const i = neutralInput(1000, 300);
+        if (!fired) [i.firePressed, i.fireHeld, i.fireReleased, fired] = [true, true, true, true];
+        return i;
+      });
+      expect(world.tank(1).hp).toBeLessThan(100);
+      expect(ai.barks.map((b) => b.kind)).toContain('hit');
+    });
+
+    it('barks never change what the units do (no RNG draws)', () => {
+      const a = setup(openMap(50, 20), { x: 500, y: 300 }, { x: 760, y: 300 });
+      const b = setup(openMap(50, 20), { x: 500, y: 300 }, { x: 760, y: 300 });
+      a.run(6);
+      b.ai.barks = [];
+      b.run(6, undefined, () => (b.ai.barks.length = 0));
+      expect(b.world.tank(1).pos).toEqual(a.world.tank(1).pos);
+      expect(b.world.tank(0).hp).toBe(a.world.tank(0).hp);
+    });
   });
 });

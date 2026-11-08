@@ -9,7 +9,7 @@ import { DT, TUNING } from '../../sim/tuning';
 import type { Vec } from '../../sim/math';
 import type { GameMap } from '../../sim/map';
 import { BotController, type RadioLine } from '../../ai/controller';
-import { SimpleController, type Posture } from '../../ai/simple';
+import { SimpleController, type Posture, type SimpleBark } from '../../ai/simple';
 import { degToRad, inZone, loadLevel, zoneCentre, type Level } from '../../level/load';
 import type { LevelData } from '../../level/format';
 import type { TimedEvent } from '../session';
@@ -347,10 +347,16 @@ export class MissionSession {
     return this.simple.maxSuspicion();
   }
 
+  /** Crew and mission radio plus intercepted boss chatter. Garrison barks are not radio: the
+   *  3D view shows them as speech bubbles over the tank that said them (see `barks`). */
   get radio(): RadioLine[] {
-    const barks = this.simple.barks.map((b) => ({ from: `${b.from} (enemy)`, text: b.text, tick: b.tick }));
     const boss = this.boss ? this.boss.radio.map((b) => ({ ...b, from: `${b.from} (enemy)` })) : [];
-    return [...this.missionRadio, ...barks, ...boss].sort((a, b) => a.tick - b.tick);
+    return [...this.missionRadio, ...boss].sort((a, b) => a.tick - b.tick);
+  }
+
+  /** Garrison barks (speaker id, line, tone), for in-world speech bubbles. */
+  get barks(): readonly SimpleBark[] {
+    return this.simple.barks;
   }
 
   // ------------------------------------------------------------------ simulation

@@ -8,7 +8,7 @@
 //   bottom-left   radio as subtitles, then a slim hull gauge with smoke / silent / brush chips
 //   bottom-right  real-time decisions
 //   cursor        reload / charge / hold ring
-//   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss
+//   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss; barks as callouts above them
 import type { MissionSession } from '../../game/mission/session';
 import type { Observation, TankView } from '../../sim/observation';
 import { WEAPON_TICKS } from '../../sim/weapon';
@@ -20,6 +20,9 @@ const ICON = {
 };
 
 const RING = 2 * Math.PI * 17;
+/** How long a bark callout stays up (ticks), and its fade-out at the end. */
+const BARK_TICKS = 30 * 2.8;
+const BARK_FADE = 30 * 0.5;
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -35,6 +38,7 @@ export class Hud3D {
   private markerKey = '';
   private hint = 0;
   private hullSegs: HTMLElement[] = [];
+  private bubbles = new Map<number, HTMLElement>();
 
   constructor(host: HTMLElement, private session: MissionSession) {
     this.root = document.createElement('div');
@@ -55,6 +59,7 @@ export class Hud3D {
       </section>
       <section class="h3-choice"></section>
       <section class="h3-markers"></section>
+      <section class="h3-barks"></section>
       <div class="h3-cursor"><svg viewBox="-24 -24 48 48">
         <circle class="trk" r="17"/><circle class="arc" r="17" transform="rotate(-90)"/>
         <path class="tick" d="M0 -23v4M0 19v4M-23 0h4M19 0h4"/><circle class="dot" r="1.6"/></svg></div>
@@ -199,8 +204,45 @@ export class Hud3D {
       this.q('.h3-markers').innerHTML = mk;
     }
 
+    // ---- barks: callouts over the enemy that spoke, only while that enemy is visible
+    this.updateBarks(cur, project);
+
     // ---- first-seconds hint
     this.hint += dt;
     this.q<HTMLElement>('.h3-hint').style.opacity = String(this.hint < 12 ? 1 : Math.max(0, 1 - (this.hint - 12) / 1.5));
+  }
+
+  private updateBarks(cur: Observation, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }): void {
+    const tick = cur.tick;
+    const latest = new Map<number, (typeof this.session.barks)[number]>();
+    for (const b of this.session.barks) if (b.tick <= tick && tick - b.tick < BARK_TICKS) latest.set(b.unit, b);
+    const host = this.q<HTMLElement>('.h3-barks');
+    const seen = new Set<number>();
+    for (const [unit, b] of latest) {
+      // Observation only: a hidden or dead speaker shows nothing.
+      const t = cur.tanks.find((v) => v.id === unit && v.alive && v.team !== cur.team);
+      const p = t && project(t.x, t.y, 64);
+      if (!t || !p || !p.on) continue;
+      seen.add(unit);
+      const key = `${b.tick}|${b.text}`;
+      let el = this.bubbles.get(unit);
+      if (!el || el.dataset.k !== key) {
+        el?.remove(); // a fresh element restarts the pop-in
+        el = document.createElement('div');
+        el.className = `bark ${b.tone}`;
+        el.dataset.k = key;
+        el.innerHTML = `<div class="box"><span class="who">${esc(b.from)}</span><span class="say">${esc(b.text)}</span></div>`;
+        host.appendChild(el);
+        this.bubbles.set(unit, el);
+      }
+      const left = BARK_TICKS - (tick - b.tick);
+      el.style.opacity = String(Math.min(1, left / BARK_FADE));
+      el.style.transform = `translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)`;
+    }
+    for (const [unit, el] of this.bubbles)
+      if (!seen.has(unit)) {
+        el.remove();
+        this.bubbles.delete(unit);
+      }
   }
 }

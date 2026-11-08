@@ -68,8 +68,44 @@ export const SIMPLE_TUNING: SimpleTuning = {
   engageRange: 300,
 };
 
+/** What a unit is reacting to; picks the line pool and the bubble's tone. */
+export type BarkKind =
+  | 'sawSomething' | 'heardSomething' | 'heardShot' | 'investigate' | 'nothing'
+  | 'spotted' | 'hit' | 'critical' | 'reloading' | 'lost' | 'giveUp' | 'support' | 'allyDown';
+
+/** Line pools. Picked deterministically (no RNG draw), so barks never change the simulation. */
+export const BARK_LINES: Record<BarkKind, readonly string[]> = {
+  sawSomething: ['Hm? Movement.', 'Did something move out there?', 'Eyes up. I saw something.', 'Wait… what was that?'],
+  heardSomething: ['You hear that?', 'Engine noise. Close.', "Something's out there.", 'Quiet. Listen.'],
+  heardShot: ['Gunfire!', 'Shots fired!', 'That was a cannon!'],
+  investigate: ['Going to check it out.', 'Moving to investigate.', "I'll take a look.", 'Checking it out.'],
+  nothing: ['Must have been nothing.', 'Just the wind.', 'Nothing here. Back to it.', 'Jumpy tonight…'],
+  spotted: ['Enemy spotted!', 'Contact! Engaging!', 'Tank! Right there!', 'Hostile in sight!'],
+  hit: ["I've been hit!", 'Taking fire!', "I'm hit! Where'd that come from?", 'Armour hit!'],
+  critical: ['Hull breached!', "I can't take another one!", 'Need support, now!'],
+  reloading: ['Reloading!', 'Loading!', 'Reloading, cover me!'],
+  lost: ['Lost them. Searching.', 'Where did they go?', 'Lost visual!'],
+  giveUp: ["They're gone. Stay sharp.", 'Area clear… for now.', 'Back to your posts.'],
+  support: ['Copy, moving to support.', 'On my way!', 'Moving up!'],
+  allyDown: ['Man down!', "They got one of ours!", 'We lost a tank!'],
+};
+
+export type BarkTone = 'calm' | 'sus' | 'combat';
+
+const BARK_TONE: Record<BarkKind, BarkTone> = {
+  sawSomething: 'sus', heardSomething: 'sus', heardShot: 'sus', investigate: 'sus', nothing: 'calm', giveUp: 'calm',
+  spotted: 'combat', hit: 'combat', critical: 'combat', reloading: 'combat', lost: 'sus', support: 'sus', allyDown: 'combat',
+};
+
+/** Urgent kinds cut through the per-unit cooldown sooner. */
+const URGENT: ReadonlySet<BarkKind> = new Set(['spotted', 'hit', 'critical', 'allyDown']);
+
 export interface SimpleBark {
+  /** Speaking unit (tank id). */
+  unit: number;
   from: string;
+  kind: BarkKind;
+  tone: BarkTone;
   text: string;
   tick: number;
 }
@@ -96,6 +132,13 @@ interface Unit {
   aimJitter: Vec;
   jitterTick: number;
   lastBark: number;
+  lastLine: string;
+  barkCount: number;
+  /** Suspicious unit has started driving to the focus point (said so once). */
+  moving: boolean;
+  lastPhase: string;
+  saidCritical: boolean;
+  shots: number;
   /** Last observed own position. */
   pos: Vec | null;
 }
@@ -140,6 +183,12 @@ export class SimpleController {
       aimJitter: { x: 0, y: 0 },
       jitterTick: -9999,
       lastBark: -9999,
+      lastLine: '',
+      barkCount: 0,
+      moving: false,
+      lastPhase: 'ready',
+      saidCritical: false,
+      shots: 0,
       pos: null,
     });
   }
@@ -183,7 +232,7 @@ export class SimpleController {
       if (u.pos && Math.hypot(at.x - u.pos.x, at.y - u.pos.y) > radius) continue;
       u.focus = { x: at.x, y: at.y };
       u.focusTarget = null;
-      this.setState(u, 'searching', tick, 'Copy, moving to support.');
+      this.setState(u, 'searching', tick, 'support');
     }
   }
 
@@ -191,6 +240,7 @@ export class SimpleController {
     const out: Record<number, TankInput> = {};
     const tick = obs.tick;
     const views = new Map(obs.tanks.map((t) => [t.id, t]));
+    this.reactToLosses(obs);
     for (const [id, u] of this.units) {
       const self = views.get(id);
       if (!self || !self.alive) {
@@ -200,6 +250,9 @@ export class SimpleController {
       u.pos = { x: self.x, y: self.y };
       this.perceive(u, self, obs);
       this.act(u, self, obs);
+      // Called after the gun goes off: not every time, or it turns into a chant.
+      if (self.phase === 'reloading' && u.lastPhase !== 'reloading' && u.state === 'combat' && u.shots++ % 2 === 0) this.bark(u, 'reloading', tick);
+      u.lastPhase = self.phase;
       out[id] = u.motor.produce(self, tick);
     }
     return out;
@@ -229,18 +282,21 @@ export class SimpleController {
         const skill = u.spec.skill ?? 0.5;
         u.suspicion = d <= t.instantRange || v.revealed ? 1 : Math.min(1, u.suspicion + (dt / fill) * (0.75 + skill * 0.5));
         if (u.suspicion >= 1) this.enterCombat(u, self, tick);
-        else if (u.state === 'calm' && u.suspicion > 0.25) this.setState(u, 'suspicious', tick, 'Hm? Movement.');
+        else if (u.state === 'calm' && u.suspicion > 0.25) this.setState(u, 'suspicious', tick, 'sawSomething');
       }
     } else {
       if (u.state !== 'combat') u.suspicion = Math.max(0, u.suspicion - t.drain * dt);
-      if (u.state === 'combat' && tick - u.lastSeenTick > HZ * 1.5) this.setState(u, 'searching', tick, 'Lost them. Searching.');
+      if (u.state === 'combat' && tick - u.lastSeenTick > HZ * 1.5) this.setState(u, 'searching', tick, 'lost');
     }
 
     // Hit: straight to combat, looking back along the shell.
     for (const e of obs.events) {
       if (e.type === 'damage' && e.target === self.id) {
         u.focus = { x: e.fromX, y: e.fromY };
-        this.enterCombat(u, self, tick);
+        const critical = self.hp <= 30 && !u.saidCritical;
+        if (critical) u.saidCritical = true;
+        if (u.state !== 'combat') this.enterCombat(u, self, tick, 'hit');
+        else this.bark(u, critical ? 'critical' : 'hit', tick);
       }
     }
 
@@ -252,28 +308,55 @@ export class SimpleController {
         u.focus = { x: self.x + dir.x * dist, y: self.y + dir.y * dist };
         u.focusTarget = null;
         u.suspicion = Math.max(u.suspicion, c.kind === 'shot' ? 0.6 : 0.3);
-        if (u.state === 'calm') this.setState(u, 'suspicious', tick, c.kind === 'shot' ? 'Gunfire!' : 'You hear that?');
+        if (u.state === 'calm') this.setState(u, 'suspicious', tick, c.kind === 'shot' ? 'heardShot' : 'heardSomething');
         else u.stateSince = tick; // renew the investigation
       }
     }
   }
 
-  private enterCombat(u: Unit, self: TankView, tick: number): void {
+  private enterCombat(u: Unit, self: TankView, tick: number, kind: BarkKind = 'spotted'): void {
     u.suspicion = 1;
     if (u.state === 'combat') return;
-    this.setState(u, 'combat', tick, 'Contact! Engaging!');
+    this.setState(u, 'combat', tick, kind);
     this.raiseAlarm(u.focus ?? { x: self.x, y: self.y }, tick, u.spec.id);
   }
 
-  private setState(u: Unit, s: AlertState, tick: number, bark?: string): void {
+  private setState(u: Unit, s: AlertState, tick: number, bark?: BarkKind): void {
     if (u.state === s) return;
     u.state = s;
     u.stateSince = tick;
+    u.moving = false;
     this.events.push({ type: 'alert', unit: u.spec.id, state: s, tick });
-    if (bark && tick - u.lastBark > HZ * 2) {
-      u.lastBark = tick;
-      this.barks.push({ from: u.spec.name, text: bark, tick });
-      if (this.barks.length > 30) this.barks.shift();
+    if (bark) this.bark(u, bark, tick);
+  }
+
+  /** Say a line from the pool unless this unit spoke very recently (urgent lines wait less). */
+  private bark(u: Unit, kind: BarkKind, tick: number): void {
+    if (tick - u.lastBark < HZ * (URGENT.has(kind) ? 0.4 : 2)) return;
+    const lines = BARK_LINES[kind];
+    let i = (u.spec.id * 7 + u.barkCount * 3 + Math.floor(tick / 11)) % lines.length;
+    if (lines.length > 1 && lines[i] === u.lastLine) i = (i + 1) % lines.length;
+    const text = lines[i]!;
+    u.lastBark = tick;
+    u.lastLine = text;
+    u.barkCount++;
+    this.barks.push({ unit: u.spec.id, from: u.spec.name, kind, tone: BARK_TONE[kind], text, tick });
+    if (this.barks.length > 30) this.barks.shift();
+  }
+
+  /** When a unit dies, the nearest comrade within earshot calls it out. */
+  private reactToLosses(obs: Observation): void {
+    for (const e of obs.events) {
+      if (e.type !== 'death' || !this.units.has(e.tank)) continue;
+      let best: { u: Unit; d: number } | null = null;
+      for (const u of this.units.values()) {
+        if (u.spec.id === e.tank || !u.pos) continue;
+        const v = obs.tanks.find((t) => t.id === u.spec.id);
+        if (!v?.alive) continue;
+        const d = Math.hypot(u.pos.x - e.x, u.pos.y - e.y);
+        if (d < 700 && (!best || d < best.d)) best = { u, d };
+      }
+      if (best) this.bark(best.u, 'allyDown', obs.tick);
     }
   }
 
@@ -292,8 +375,14 @@ export class SimpleController {
         const f = u.focus;
         if (f) m.aim = f;
         if (age < 1.2) m.stop();
-        else if (f) m.goTo(f, { arrive: 70 });
-        if (age > this.tune.investigateTime && u.suspicion < 0.25) this.setState(u, 'calm', tick, 'Must have been nothing.');
+        else if (f) {
+          if (!u.moving) {
+            u.moving = true;
+            this.bark(u, 'investigate', tick);
+          }
+          m.goTo(f, { arrive: 70 });
+        }
+        if (age > this.tune.investigateTime && u.suspicion < 0.25) this.setState(u, 'calm', tick, 'nothing');
         break;
       }
       case 'searching': {
@@ -306,7 +395,7 @@ export class SimpleController {
         }
         if (age > this.tune.searchTime) {
           u.suspicion = 0.3;
-          this.setState(u, 'suspicious', tick, "They're gone. Stay sharp.");
+          this.setState(u, 'suspicious', tick, 'giveUp');
           u.stateSince = tick - HZ * (this.tune.investigateTime - 1.5);
         }
         break;

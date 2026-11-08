@@ -194,6 +194,21 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-markers .combat span { color: #fff; font-size: 15px; text-shadow: none; }
 .h3-markers .boss span { color: var(--rust); font-size: 20px; }
 
+/* enemy barks: radio-intercept style callouts on a leader line above the speaker's marker */
+.h3-barks .bark { position: absolute; left: 0; top: 0; width: 0; height: 0; --tone: var(--dim); transition: opacity .2s linear; }
+.h3-barks .bark.sus { --tone: var(--amber); }
+.h3-barks .bark.combat { --tone: var(--rust); }
+.h3-barks .bark::before { content: ''; position: absolute; left: -.5px; bottom: 18px; width: 1px; height: 16px;
+  background: linear-gradient(to top, transparent, var(--tone)); opacity: .75; }
+.h3-barks .box { position: absolute; bottom: 34px; left: 0; transform: translateX(-50%); transform-origin: 50% 100%; white-space: nowrap;
+  display: flex; flex-direction: column; gap: 1px; padding: 4px 10px 5px; border-left: 2px solid var(--tone); border-radius: 2px;
+  background: linear-gradient(90deg, rgba(4,8,7,.78), rgba(4,8,7,.5)); box-shadow: 0 4px 18px rgba(0,0,0,.35); animation: h3bark .22s cubic-bezier(.2,.9,.3,1.25); }
+.h3-barks .who { font: 700 10px/1.1 Rajdhani, system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; color: var(--tone); opacity: .85; }
+.h3-barks .say { font: 14px/1.2 'Share Tech Mono', ui-monospace, monospace; color: #f3ead8; }
+.h3-barks .combat .say { color: #ffd9c9; }
+@keyframes h3bark { from { opacity: 0; transform: translateX(-50%) translateY(5px) scale(.9); } }
+@media (prefers-reduced-motion: reduce) { .h3-barks .box { animation: none; } }
+
 /* misc */
 .h3-lost { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: 'Stardos Stencil', Rajdhani, sans-serif; font-size: 64px; letter-spacing: .12em; color: var(--rust); opacity: 0; transition: opacity .6s; }
 .h3.dead .h3-lost { opacity: 1; }

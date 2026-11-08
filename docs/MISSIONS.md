@@ -27,7 +27,7 @@ unit, objective and trigger id it mentions must exist.
 | Field | Meaning |
 |---|---|
 | `id` | Used by triggers. `player` and `any-enemy` are reserved. |
-| `name` | Callsign in intercepted radio barks. |
+| `name` | Callsign on the unit's bark callouts. |
 | `marker` | Spawn point. The marker's `facing` sets the starting direction. |
 | `ai` | `simple` for ordinary garrison units, `boss` for the full tactical squad AI (see [AI.md](AI.md)). |
 | `posture` | What a calm unit does: `{ "patrol": pathId }`, `{ "guard": markerId }` (stand there and scan around the marker's facing) or `{ "hold": markerId }`. Default: guard its own spawn marker. |
@@ -47,6 +47,11 @@ Each unit has a **suspicion meter** (shown on the HUD as HIDDEN / SUSPICIOUS / A
 - After losing you, a unit searches for about 9 s, then goes back to suspicious, then calm.
 
 All of these numbers are in `SIMPLE_TUNING` (`src/ai/simple.ts`).
+
+Units **bark** as they react: noticing something, going to investigate, spotting you, getting hit,
+reloading, losing you, giving up, or seeing a comrade destroyed. The 3D view shows each line as a
+callout over the speaker, only while that tank is visible to you; they are not radio. Lines live in
+`BARK_LINES` and are picked without drawing from the AI's RNG, so barks never change the simulation.
 
 ## Objectives
 

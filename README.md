@@ -43,7 +43,8 @@ npm run build && npm run preview     # production build on http://localhost:4173
 
 - **Missions** ([docs/MISSIONS.md](docs/MISSIONS.md)): JSON triggers and objectives, crew radio,
   real-time choices, checkpoints. Levels are data authored in LDtk ([docs/LEVELS.md](docs/LEVELS.md)).
-- **Two AI tiers**: a readable garrison AI with a stealth suspicion meter for ordinary units, and the
+- **Two AI tiers**: a readable garrison AI with a stealth suspicion meter and spoken barks ("Going to
+  check it out", "Enemy spotted!", "Reloading!") shown as callouts over visible enemies, and the
   full tactical squad AI (utility goals, GOAP plans, flanking, searching) for bosses and Skirmish
   ([docs/AI.md](docs/AI.md)).
 - **Simulation**: a fixed 30 Hz deterministic sim with momentum driving, a charge/tap cannon with
