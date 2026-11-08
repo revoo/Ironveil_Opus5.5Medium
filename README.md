@@ -37,6 +37,7 @@ npm run build && npm run preview     # production build on http://localhost:4173
 | **1 2 3** | Answer a crew decision (missions) |
 | **Wheel** | Zoom (missions) |
 | **Esc** / P | Pause |
+| **V** | Performance telemetry: FPS, frame times, CPU/GPU split, draw calls (missions) |
 
 ## What's in the build
 

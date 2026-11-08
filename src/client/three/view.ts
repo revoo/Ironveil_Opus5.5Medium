@@ -25,6 +25,8 @@ import { buildTank, radialTexture, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
 import { CueArcs, Decals, Flashes, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
 import { Hud3D } from './hud';
+import { Telemetry } from './telemetry';
+import { codeLabel } from '../settings';
 
 export interface MissionViewDeps {
   session: MissionSession;
@@ -107,6 +109,7 @@ export class MissionView3D {
   private disposed = false;
   private lampFlick = 1;
   private hud: Hud3D;
+  private telemetry: Telemetry;
   private minimap: HTMLCanvasElement;
   private miniBase: HTMLCanvasElement;
   private ray = new THREE.Raycaster();
@@ -195,6 +198,8 @@ export class MissionView3D {
 
     // ---- DOM: vehicle panel, radio, minimap, enemy alert markers
     this.hud = new Hud3D(container, this.session);
+    this.telemetry = new Telemetry(this.hud.root, this.renderer);
+    this.telemetry.setKeyLabel(codeLabel(d.settings.bindings.telemetry[0] ?? 'KeyV'));
     this.minimap = document.createElement('canvas');
     this.minimap.className = 'minimap3d';
     container.appendChild(this.minimap);
@@ -383,6 +388,10 @@ export class MissionView3D {
     }
   }
 
+  toggleTelemetry(): void {
+    this.telemetry.toggle();
+  }
+
   applySettings(): void {
     const low = this.d.settings.lowEffects;
     this.gtao.enabled = !low;
@@ -417,6 +426,7 @@ export class MissionView3D {
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
+    this.telemetry.dispose();
     this.hud.dispose();
     this.minimap.remove();
   }
@@ -425,6 +435,8 @@ export class MissionView3D {
   private frame(now: number): void {
     if (this.disposed) return;
     this.raf = requestAnimationFrame((t) => this.frame(t));
+    const t0 = performance.now();
+    this.telemetry.frameStart(now);
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const s = this.session;
@@ -433,11 +445,13 @@ export class MissionView3D {
     this.ray.setFromCamera(new THREE.Vector2(this.mouse.x, this.mouse.y), this.camera);
     const hit = new THREE.Vector3();
     if (this.ray.ray.intersectPlane(this.plane, hit)) this.aim = { x: hit.x, y: hit.z };
-    s.advance(dt, () => {
+    const tSim = performance.now();
+    const ticks = s.advance(dt, () => {
       const inp = this.d.input.sample(this.aim);
       const m = this.screenRelative(inp.moveX, inp.moveY);
       return { ...inp, moveX: m.x, moveY: m.y };
     });
+    const simMs = performance.now() - tSim;
     for (const { event } of s.drainEvents()) this.onEvent(event);
     for (const { cue } of s.drainCues()) {
       this.d.audio.cue(cue.kind, cue.sector, cue.band === 'near');
@@ -485,7 +499,11 @@ export class MissionView3D {
     this.renderReticle(cur, selfPos);
     (this.grade.uniforms.uTime as { value: number }).value = t;
     (this.grade.uniforms.uHurt as { value: number }).value = this.hurt;
+    const tRender = performance.now();
+    this.telemetry.gpuBegin();
     this.composer.render();
+    this.telemetry.gpuEnd();
+    const tHud = performance.now();
 
     const me = cur.tanks.find((x) => x.id === s.playerId);
     this.d.audio.setEngine(me ? Math.hypot(me.vx, me.vy) : 0, !!me?.alive && !s.paused, !!me?.quiet);
@@ -493,6 +511,8 @@ export class MissionView3D {
     this.hud.update(cur, me, this.mousePx, (x, y, h) => this.project(x, y, h), dt);
     this.directAudio(now);
     this.renderMinimap(cur, selfPos);
+    const tEnd = performance.now();
+    this.telemetry.frameEnd(tEnd, { ticks, simMs, renderMs: tHud - tRender, hudMs: tEnd - tHud, cpuMs: tEnd - t0 });
 
     if (s.outcome && !this.ended) {
       this.ended = true;

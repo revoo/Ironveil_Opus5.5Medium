@@ -1,7 +1,7 @@
 // Persistent per-player settings (localStorage, guarded — the game works without it).
 import type { Difficulty } from '../ai/personality';
 
-export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'cancel' | 'smoke' | 'silent' | 'scoreboard' | 'pause';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'cancel' | 'smoke' | 'silent' | 'scoreboard' | 'pause' | 'telemetry';
 
 export const ACTION_LABELS: Record<Action, string> = {
   up: 'Move up',
@@ -14,6 +14,7 @@ export const ACTION_LABELS: Record<Action, string> = {
   silent: 'Silent running (hold)',
   scoreboard: 'Scoreboard (hold)',
   pause: 'Pause / menu',
+  telemetry: 'Performance telemetry',
 };
 
 export interface Settings {
@@ -41,6 +42,7 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   silent: ['ShiftLeft', 'ShiftRight'],
   scoreboard: ['Tab'],
   pause: ['Escape', 'KeyP'],
+  telemetry: ['KeyV'],
 };
 
 const KEY = 'ironveil.settings.v1';

@@ -82,6 +82,7 @@ export class InputManager {
     if (this.bound('smoke', code)) this.smokeEdge = true;
     if (this.bound('pause', code)) this.onAction('pause');
     if (this.bound('scoreboard', code)) this.onAction('scoreboard');
+    if (this.bound('telemetry', code)) this.onAction('telemetry');
   }
 
   private up(code: string): void {

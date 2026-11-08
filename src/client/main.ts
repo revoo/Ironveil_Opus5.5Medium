@@ -68,6 +68,7 @@ input.onAction = (a: Action) => {
     if (paused) closePause();
     else openPause();
   }
+  if (a === 'telemetry') view3d?.toggleTelemetry();
 };
 window.addEventListener('keydown', (e) => {
   if (e.code === 'F3') hud.showDebug = !hud.showDebug;
