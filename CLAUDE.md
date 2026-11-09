@@ -79,11 +79,25 @@ The owner tests through private claude.ai artifacts. Republish to the same URL a
 
 ## Status and next steps
 
-- `main` holds everything; work on short-lived branches off `main`. The Render Lab rendering
-  experiment is preserved on the read-only branch `archive/poc-render-tech`; its code now lives
-  in `src/client/three/`. Merged branches (`fix/headlight-shader-recompile`, `feat/perf-telemetry`,
-  `feat/enemy-barks`) can be deleted by the owner.
+- `main` holds everything; work on short-lived branches off `main`, merge by fast-forward when the
+  owner says so. The Render Lab experiment is preserved on the read-only branch
+  `archive/poc-render-tech`; its code now lives in `src/client/three/`.
+- **Merged branches are kept as souvenirs** (owner's wish), never deleted: `fix/headlight-shader-recompile`,
+  `feat/perf-telemetry`, `feat/enemy-barks`, `feat/demo-level`, `feat/combat-fx`, `feat/charged-shot`.
+  Cloud sessions can't rename or delete branches or push tags; queue such chores below for a
+  desktop session.
+- Shipped recently (see docs/DECISIONS.md D24–D27): *The Long Night* (5–10 min playtest level, first
+  in the menu) and *Night Run* (short demo), paced garrison combat (60 HP, `shotGap`), combat
+  feedback and multi-stage kills, the charged shot as a strategic decision (gauge, LETHAL, splash).
+- Not yet verified by a human: frame rate on a real GPU in big fights (press `V`), the explosion and
+  charge audio mix, and whether the combat numbers feel right. Ask for playtest notes before tuning.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
-- Planned: crew system phase 1, Ink dialogue, first real LDtk mission, recorded CC0 weapon/engine
-  samples to replace the weakest synthesised SFX.
+- Candidates for next features: crew system phase 1, Ink dialogue, first real LDtk mission, recorded
+  CC0 weapon/engine samples, a crew line when the player takes a heavy hit, steam on a vented cannon.
 - docs/VALIDATION.md and docs/PLAYTEST.md describe the Skirmish-era build only.
+
+### Desktop clean-up queue
+
+Chores a cloud session can't do (needs the owner's own git credentials). Check each against the repo
+first, show the owner the list, and act only on their OK.
+- (empty: the owner keeps merged branches as they are)
