@@ -117,6 +117,7 @@ export class MissionView3D {
   private listeners: (() => void)[] = [];
   // audio direction state
   private heardRadio = new Set<string>();
+  private heardBarks = new Set<string>();
   private noticeCount = 0;
   private hadChoice = false;
   private lastDet = 0;
@@ -229,6 +230,7 @@ export class MissionView3D {
     d.audio.setMood('calm');
     // lines already on the radio at construction (e.g. after a checkpoint) are not replayed
     for (const r of this.session.radio) this.heardRadio.add(`${r.tick}|${r.from}|${r.text}`);
+    for (const b of this.session.barks) this.heardBarks.add(`${b.unit}|${b.tick}|${b.text}`);
     this.noticeCount = this.session.notices.length;
     this.prewarmShaders();
     this.raf = requestAnimationFrame((t) => this.frame(t));
@@ -533,6 +535,17 @@ export class MissionView3D {
       this.heardRadio.add(key);
       a.radioLine(r.from, r.text, r.from.endsWith('(enemy)'));
     }
+    // barks: heard only from enemies you can see (the same rule as their callouts)
+    const obs = s.obs;
+    const barkKeys = new Set<string>();
+    for (const b of s.barks) {
+      const key = `${b.unit}|${b.tick}|${b.text}`;
+      barkKeys.add(key);
+      if (this.heardBarks.has(key) || obs.tick - b.tick > 15) continue;
+      const t = obs.tanks.find((v) => v.id === b.unit && v.alive && v.team !== obs.team);
+      if (t) a.bark(b.from, b.text, b.kind, this.pan(t.x), Math.max(0.25, this.vol(t.x, t.y, 1100)));
+    }
+    this.heardBarks = barkKeys;
     // notices: checkpoint and objective stingers
     while (this.noticeCount < s.notices.length) {
       const n = s.notices[this.noticeCount++]!.text;

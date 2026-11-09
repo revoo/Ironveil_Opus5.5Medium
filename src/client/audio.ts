@@ -2,7 +2,8 @@
 // panned by their coarse sector only; visible sources use their authorised positions.
 import type { Settings } from './settings';
 import { Music, type MusicMood } from './sound/music';
-import { Radio } from './sound/radio';
+import { Radio, type BarkFlavour } from './sound/radio';
+import type { BarkKind } from '../ai/simple';
 import { Ambience, type AmbienceScene } from './sound/ambience';
 
 type Ctx = AudioContext;
@@ -142,6 +143,39 @@ export class AudioEngine {
     if (!this.radio || !this.score) return;
     const d = this.radio.line(from, text, enemy);
     if (!enemy) this.score.duck(0.35, d);
+  }
+
+  /** A garrison bark from a visible enemy: radio burst at its position, plus any world foley. */
+  bark(from: string, text: string, kind: BarkKind, pan: number, vol: number): void {
+    if (!this.radio) return;
+    const flavour: BarkFlavour =
+      kind === 'nothing' || kind === 'giveUp' ? 'calm'
+      : kind === 'hit' || kind === 'critical' ? 'hit'
+      : kind === 'allyDown' ? 'priority'
+      : kind === 'spotted' || kind === 'reloading' ? 'contact'
+      : 'alert';
+    this.radio.bark({ from, text, flavour, pan, vol });
+    if (kind === 'reloading') this.breech(pan, vol);
+  }
+
+  /** Breech block: a heavy clack, the shell rolling in, the block slamming shut. */
+  private breech(pan: number, vol: number): void {
+    if (!this.ctx || vol <= 0.01) return;
+    const o = this.out(pan, 0.55 * Math.max(0.3, vol), 0.3);
+    this.noise(0.06, o, 'bandpass', 2400, 2.5, 1400, 0.001, 0.7);
+    this.tone('triangle', 340, 170, 0.09, o, 0.5);
+    setTimeout(() => {
+      if (!this.ctx) return;
+      const o2 = this.out(pan, 0.5 * Math.max(0.3, vol), 0.3);
+      this.noise(0.22, o2, 'bandpass', 700, 1.2, 380, 0.02, 0.25);
+      setTimeout(() => {
+        if (!this.ctx) return;
+        const o3 = this.out(pan, 0.6 * Math.max(0.3, vol), 0.35);
+        this.noise(0.08, o3, 'bandpass', 3000, 3, 1800, 0.001, 0.8);
+        this.tone('square', 220, 110, 0.07, o3, 0.35);
+        this.tone('triangle', 1900, 1300, 0.05, o3, 0.2);
+      }, 230);
+    }, 160);
   }
 
   choiceOpen(): void {
