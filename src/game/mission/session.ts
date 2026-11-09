@@ -9,7 +9,7 @@ import { DT, TUNING } from '../../sim/tuning';
 import type { Vec } from '../../sim/math';
 import type { GameMap } from '../../sim/map';
 import { BotController, type RadioLine } from '../../ai/controller';
-import { SimpleController, type Posture, type SimpleBark } from '../../ai/simple';
+import { SIMPLE_TUNING, SimpleController, type Posture, type SimpleBark } from '../../ai/simple';
 import { degToRad, inZone, loadLevel, zoneCentre, type Level } from '../../level/load';
 import type { LevelData } from '../../level/format';
 import type { TimedEvent } from '../session';
@@ -122,7 +122,7 @@ export class MissionSession {
     this.tankUnit.clear();
     this.unitDefs.clear();
     this.spawned = cp ? structuredClone(cp.spawned) : [];
-    this.simple = new SimpleController(level.map, 1, this.seed ^ 0x51);
+    this.simple = new SimpleController(level.map, 1, this.seed ^ 0x51, [], def.alarmRadius ? { ...SIMPLE_TUNING, alarmRadius: def.alarmRadius } : SIMPLE_TUNING);
     this.boss = null;
     const destroyed = new Set(cp?.destroyed ?? []);
     for (const u of [...def.units, ...this.spawned]) {
@@ -282,7 +282,8 @@ export class MissionSession {
       } else if ('alarm' in a) {
         const p = this.world.tank(this.playerId).pos;
         this.simple.raiseAlarm(a.at ? this.placeOf(a.at) : { x: p.x, y: p.y }, tick, -1, a.radius ?? Infinity);
-      } else if ('checkpoint' in a) this.pendingCheckpoint = a.checkpoint;
+      } else if ('repair' in a) this.world.tank(this.playerId).hp = TUNING.tank.maxHp;
+      else if ('checkpoint' in a) this.pendingCheckpoint = a.checkpoint;
       else if ('choice' in a) this.openChoice(a.choice);
       else if ('end' in a) this.finish({ result: a.end, reason: 'scripted', ...(a.text ? { text: a.text } : {}) });
     },

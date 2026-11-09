@@ -1,0 +1,150 @@
+{
+  "id": "night-run",
+  "title": "Demo: Night Run",
+  "summary": "A long, winding run across the district: rail yard, market, canal, depot. Small patrols, a checkpoint and field repairs between each.",
+  "level": "night-run",
+  "briefing": "Cross the district to the rail depot at the far end of the south quarter. The route snakes through the rail yard, the market square, over the canal and down the depot road. Each stretch has only a few guards and a way around them; between stretches the crew can patch the tank and you get a checkpoint. Fight if you must, but every shot is heard.",
+  "playerName": "Ironveil",
+  "alarmRadius": 560,
+  "units": [
+    { "id": "a_patrol", "name": "Road Patrol", "marker": "a_patrol_start", "ai": "simple", "posture": { "patrol": "a_road" }, "skill": 0.3 },
+    { "id": "b_gate", "name": "Yard Gate", "marker": "b_gate", "ai": "simple", "skill": 0.4 },
+    { "id": "b_patrol", "name": "Yard Patrol", "marker": "b_patrol_start", "ai": "simple", "posture": { "patrol": "b_yard" }, "skill": 0.4 },
+    { "id": "c_post", "name": "Market Post", "marker": "c_post", "ai": "simple", "skill": 0.45 },
+    { "id": "c_patrol", "name": "Market Patrol", "marker": "c_patrol_start", "ai": "simple", "posture": { "patrol": "c_market" }, "skill": 0.45 },
+    { "id": "d_bridge", "name": "Bridge Watch", "marker": "d_bridge", "ai": "simple", "skill": 0.5 },
+    { "id": "d_bank", "name": "Bank Patrol", "marker": "d_patrol_start", "ai": "simple", "posture": { "patrol": "d_bank" }, "skill": 0.45 },
+    { "id": "e_gate", "name": "Road Block", "marker": "e_gate", "ai": "simple", "skill": 0.5 },
+    { "id": "f_gate_n", "name": "Depot Gate N", "marker": "f_gate_n", "ai": "simple", "skill": 0.55 },
+    { "id": "f_gate_s", "name": "Depot Gate S", "marker": "f_gate_s", "ai": "simple", "skill": 0.55 },
+    { "id": "f_patrol", "name": "Depot Patrol", "marker": "f_patrol_start", "ai": "simple", "posture": { "patrol": "f_depot" }, "skill": 0.55 }
+  ],
+  "objectives": [
+    { "id": "o_yard", "text": "Get through the rail yard" },
+    { "id": "o_market", "text": "Cross the market square", "state": "hidden" },
+    { "id": "o_canal", "text": "Cross the canal", "state": "hidden" },
+    { "id": "o_depot", "text": "Reach the extraction point in the depot", "state": "hidden" },
+    { "id": "stay_hidden", "text": "Stay undetected (optional)" }
+  ],
+  "triggers": [
+    {
+      "id": "intro",
+      "when": { "after": 1 },
+      "do": [
+        { "radio": "Long way round tonight. Yard, market, canal, then the depot.", "from": "Commander" },
+        { "radio": "One patrol on the road ahead. Hedges both sides if we'd rather not meet it.", "from": "Driver", "delay": 4 }
+      ]
+    },
+    {
+      "id": "outskirts",
+      "when": { "enter": "outskirts" },
+      "do": [{ "radio": "Hold for it to turn away, then go. Silent running keeps the engine down.", "from": "Gunner" }]
+    },
+    {
+      "id": "cp_yard",
+      "when": { "enter": "z_yard" },
+      "do": [
+        { "checkpoint": "cp_yard" },
+        { "repair": true },
+        { "radio": "Rail yard. Guard on the road gate, another walking the sidings.", "from": "Gunner" },
+        { "radio": "Fence is down along the south side. All overgrown.", "from": "Driver", "delay": 3.5 }
+      ]
+    },
+    {
+      "id": "in_yard",
+      "when": { "enter": "yard_inside" },
+      "do": [{ "radio": "Through the fence. The road bends south past the shed.", "from": "Driver" }]
+    },
+    {
+      "id": "cp_turn",
+      "when": { "enter": "z_turn" },
+      "do": [
+        { "objective": "o_yard", "state": "complete" },
+        { "objective": "o_market", "state": "active" },
+        { "checkpoint": "cp_turn" },
+        { "repair": true },
+        { "radio": "Clear of the yard. Loader, patch what you can.", "from": "Commander" },
+        { "radio": "Market's west of here. There's a back alley behind the shops.", "from": "Driver", "delay": 3.5 }
+      ]
+    },
+    {
+      "id": "market",
+      "when": { "enter": "market" },
+      "do": [{ "radio": "Two in the square. One parked, one doing laps.", "from": "Gunner" }]
+    },
+    {
+      "id": "cp_market",
+      "when": { "enter": "z_market" },
+      "do": [
+        { "objective": "o_market", "state": "complete" },
+        { "objective": "o_canal", "state": "active" },
+        { "checkpoint": "cp_market" },
+        { "repair": true },
+        { "radio": "Canal ahead. The bridge is watched.", "from": "Gunner" },
+        { "radio": "There's a ford south, through the reeds. Mud'll slow us and leave tracks.", "from": "Driver", "delay": 3.5 }
+      ]
+    },
+    {
+      "id": "canal",
+      "when": { "enter": "canal" },
+      "do": [{ "radio": "Keep it slow. Someone walks the far bank.", "from": "Commander" }]
+    },
+    {
+      "id": "cp_bend",
+      "when": { "enter": "z_bend" },
+      "do": [
+        { "objective": "o_canal", "state": "complete" },
+        { "objective": "o_depot", "state": "active" },
+        { "checkpoint": "cp_bend" },
+        { "repair": true },
+        { "radio": "Last stretch. Road block at the wall ahead.", "from": "Gunner" },
+        { "radio": "North end of that wall's collapsed. Overgrown, we'd fit.", "from": "Driver", "delay": 3.5 }
+      ]
+    },
+    {
+      "id": "cp_depot",
+      "when": { "enter": "z_depot" },
+      "do": [
+        { "checkpoint": "cp_depot" },
+        { "repair": true },
+        { "radio": "Depot fence. Two on the gate, one walking the yard inside.", "from": "Gunner" },
+        { "radio": "Drainage ditch runs under the fence on the south side.", "from": "Driver", "delay": 3.5 },
+        { "radio": "Extraction's at the far east end. Get us there.", "from": "Commander", "delay": 7 }
+      ]
+    },
+    {
+      "id": "depot_reaction",
+      "when": { "any": [{ "destroyed": "f_gate_n" }, { "destroyed": "f_gate_s" }, { "destroyed": "f_patrol" }] },
+      "do": [
+        { "radio": "They're calling it in. Something's coming from the rail sidings.", "from": "Loader" },
+        { "spawn": { "id": "f_qrf", "name": "Depot Reaction", "marker": "f_qrf", "ai": "simple", "skill": 0.6 } },
+        { "alarm": true, "at": "depot_inside" }
+      ]
+    },
+    {
+      "id": "spotted",
+      "when": { "alarm": true },
+      "do": [
+        { "objective": "stay_hidden", "state": "failed" },
+        { "radio": "They've seen us! Finish it or break contact.", "from": "Commander" }
+      ]
+    },
+    {
+      "id": "extract_clean",
+      "when": { "all": [{ "enter": "extraction" }, { "not": { "alarm": true } }] },
+      "do": [
+        { "objective": "o_depot", "state": "complete" },
+        { "objective": "stay_hidden", "state": "complete" },
+        { "end": "success", "text": "Across the whole district without a shot. Nobody knows we were here." }
+      ]
+    },
+    {
+      "id": "extract_loud",
+      "when": { "all": [{ "enter": "extraction" }, { "alarm": true }] },
+      "do": [
+        { "objective": "o_depot", "state": "complete" },
+        { "end": "success", "text": "We made the depot. Not quietly, but we made it." }
+      ]
+    }
+  ]
+}

@@ -113,20 +113,26 @@ function wireSeg(root: HTMLElement, name: string, onPick: (v: string) => void): 
   );
 }
 
+let selectedMission = '';
+
 function mainMenu(): void {
   inMatch = false;
   audio.setScene('menu');
   audio.setMood('menu');
-  const m = MISSIONS[0]!.mission;
+  if (!MISSIONS.some((x) => x.mission.id === selectedMission)) selectedMission = MISSIONS[0]!.mission.id;
   const d = screen(`
     <div class="card">
       <h1>IRONVEIL</h1>
       <div class="tag">A tank crew, a divided city, and a long night</div>
       <div class="row"><label>Callsign</label><input type="text" id="name" maxlength="14" value="${escapeHtml(settings.playerName)}"></div>
-      <div class="mission-card">
-        <div class="eyebrow">Campaign · mission 0</div>
-        <div class="mtitle">${escapeHtml(m.title)}</div>
-        <div class="muted small">Stealth and combat through a checkpoint district, rendered in 3D.</div>
+      <div class="missions">${MISSIONS.map(
+        ({ mission: x }, i) => `
+        <button class="mission-card${x.id === selectedMission ? ' on' : ''}" data-mission="${escapeHtml(x.id)}">
+          <div class="eyebrow">Mission ${i + 1}</div>
+          <div class="mtitle">${escapeHtml(x.title)}</div>
+          <div class="muted small">${escapeHtml(x.summary ?? '')}</div>
+        </button>`,
+      ).join('')}
       </div>
       <div class="actions">
         <button class="primary" id="mission">Play mission</button>
@@ -156,8 +162,15 @@ function mainMenu(): void {
   d.querySelector('#mission')!.addEventListener('click', () => {
     settings.playerName = ((d.querySelector('#name') as HTMLInputElement).value.trim() || 'You').slice(0, 14);
     saveSettings(settings);
-    missionBriefing(MISSIONS[0]!.mission.id);
+    missionBriefing(selectedMission);
   });
+  d.querySelectorAll<HTMLButtonElement>('[data-mission]').forEach((b) =>
+    b.addEventListener('click', () => {
+      selectedMission = b.dataset.mission!;
+      d.querySelectorAll('[data-mission]').forEach((x) => x.classList.toggle('on', x === b));
+      audio.click();
+    }),
+  );
   d.querySelector('#how')!.addEventListener('click', () => howTo(mainMenu));
   d.querySelector('#settings')!.addEventListener('click', () => settingsScreen(mainMenu));
 }

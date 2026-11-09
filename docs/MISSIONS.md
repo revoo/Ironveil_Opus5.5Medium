@@ -4,6 +4,9 @@ A mission is a JSON file in `src/content/missions/` that places **units** on a *
 (see [LEVELS.md](LEVELS.md)) and wires up **objectives** and **triggers**: *when this happens, do
 these things*. Register it in `src/content/missions/index.ts`.
 `src/content/missions/greybox-crossing.json` is a complete example that uses every feature once.
+`src/content/missions/night-run.json` (the demo, listed first in the menu) shows the intended pacing
+on a large map: six stretches, one or two guards per stretch with a way around them, and a
+checkpoint plus field repair between stretches.
 
 ```
 level JSON ─┐
@@ -56,6 +59,16 @@ voice-like murmur), flavoured by situation: priority beeps on contact, static an
 a softer key-up when calm, plus the breech clank on "Reloading!". Lines live in
 `BARK_LINES` and are picked without drawing from the AI's RNG, so barks never change the simulation.
 
+### Mission-level settings
+
+| Field | Meaning |
+|---|---|
+| `summary` | One line under the title on the menu's mission card. |
+| `alarmRadius` | How far (px) a garrison alarm reaches. Default 900. On a large map, keep separate stretches further apart than this so a fight in one doesn't empty the next (`night-run` uses 560). |
+
+Garrison units fire at most once every `shotGap` seconds (1.5 s at skill 0.5, slower for low
+skill, faster for high), so two tanks in the open give you a few seconds to react, not one.
+
 ## Objectives
 
 ```json
@@ -99,6 +112,7 @@ trigger (`"once": false`) fires each time its condition *becomes* true.
 | `{ "order": "unit", "posture": { "patrol": "path" } }` | change a simple unit's posture |
 | `{ "alarm": true, "at": "marker_or_zone", "radius": 600 }` | raise the alarm (default: at the player, whole map) |
 | `{ "checkpoint": "marker" }` | save a checkpoint; retrying restarts the player at that marker |
+| `{ "repair": true }` | restore the player's tank to full health (field repairs at a checkpoint) |
 | `{ "choice": { ... } }` | a real-time decision (below) |
 | `{ "end": "success", "text": "..." }` | end the mission (`failure` too) |
 

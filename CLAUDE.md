@@ -22,7 +22,7 @@ npm run dev         # http://localhost:5173
 | Tactical AI (bosses, Skirmish bots) | `src/ai/bot.ts`, `controller.ts`, `memory.ts`, `tactics.ts`, `planner.ts`, `nav.ts`, `motor.ts` (see docs/AI.md) |
 | Level format, validation, LDtk import | `src/level/` · docs/LEVELS.md |
 | Missions: data types, trigger runner, validator, session (checkpoints, choices) | `src/game/mission/` · docs/MISSIONS.md |
-| Content | `src/content/levels/*.json`, `src/content/missions/*.json` + `missions/index.ts` registry |
+| Content | `src/content/levels/*.json`, `src/content/missions/*.json` + `missions/index.ts` registry (first entry is selected in the menu; `night-run` is the demo) |
 | App shell: menus, pause, results, start/stop of both modes | `src/client/main.ts` |
 | 3D mission view | `src/client/three/`: `view.ts` (loop, camera, input, events), `world.ts` (level → scene), `models.ts`, `materials.ts` (procedural PBR), `fx.ts`, `hud.ts` (DOM HUD) |
 | 2D Skirmish client | `src/client/GameScene.ts`, `hud.ts`, `fx.ts`, `textures.ts` (Phaser) |

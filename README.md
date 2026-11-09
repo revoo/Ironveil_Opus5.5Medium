@@ -6,9 +6,10 @@ checkpoint districts while your crew talks you through it, and make real-time de
 remember. The original **team deathmatch** against a tactical AI squad remains as a 2D
 **Skirmish** mode.
 
-> **Status:** campaign foundation. One playable grey-box mission (*The Crossing*) exercises every
-> system: levels, missions, garrison AI, checkpoints, real-time choices, the 3D renderer and the
-> adaptive audio. Story, crew system and real levels are next. Multiplayer is deferred
+> **Status:** campaign foundation. Two missions: *Night Run*, a long demo level with the intended
+> pacing (six stretches, a few guards each, checkpoints with field repairs between them), and the
+> grey box *The Crossing*, which exercises every system once: levels, missions, garrison AI,
+> checkpoints, real-time choices, the 3D renderer and the adaptive audio. Story, crew system and real levels are next. Multiplayer is deferred
 > ([docs/DECISIONS.md](docs/DECISIONS.md)).
 
 ## Quick start

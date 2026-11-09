@@ -37,6 +37,7 @@ export function validateMission(def: MissionDef, level: Level): string[] {
       if ('choice' in a) a.choice.options.forEach((o) => visitActions(o.do, fn));
     }
   };
+  if (def.alarmRadius !== undefined && !(def.alarmRadius > 0)) p.push('alarmRadius must be a positive number');
   for (const t of def.triggers) {
     if (triggers.has(t.id)) p.push(`duplicate trigger id "${t.id}"`);
     triggers.add(t.id);

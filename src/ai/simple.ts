@@ -55,6 +55,8 @@ export interface SimpleTuning {
   alarmRadius: number;
   /** Preferred engagement range (px). */
   engageRange: number;
+  /** Seconds between shots at skill 0.5 (x1.25 at skill 0, x0.75 at skill 1). Garrison crews are not aces. */
+  shotGap: number;
 }
 
 export const SIMPLE_TUNING: SimpleTuning = {
@@ -66,6 +68,7 @@ export const SIMPLE_TUNING: SimpleTuning = {
   investigateTime: 6,
   alarmRadius: 900,
   engageRange: 300,
+  shotGap: 1.5,
 };
 
 /** What a unit is reacting to; picks the line pool and the bubble's tone. */
@@ -139,6 +142,7 @@ interface Unit {
   lastPhase: string;
   saidCritical: boolean;
   shots: number;
+  lastShotTick: number;
   /** Last observed own position. */
   pos: Vec | null;
 }
@@ -189,6 +193,7 @@ export class SimpleController {
       lastPhase: 'ready',
       saidCritical: false,
       shots: 0,
+      lastShotTick: -9999,
       pos: null,
     });
   }
@@ -251,7 +256,10 @@ export class SimpleController {
       this.perceive(u, self, obs);
       this.act(u, self, obs);
       // Called after the gun goes off: not every time, or it turns into a chant.
-      if (self.phase === 'reloading' && u.lastPhase !== 'reloading' && u.state === 'combat' && u.shots++ % 2 === 0) this.bark(u, 'reloading', tick);
+      if (self.phase === 'reloading' && u.lastPhase !== 'reloading') {
+        u.lastShotTick = tick;
+        if (u.state === 'combat' && u.shots++ % 2 === 0) this.bark(u, 'reloading', tick);
+      }
       u.lastPhase = self.phase;
       out[id] = u.motor.produce(self, tick);
     }
@@ -466,6 +474,7 @@ export class SimpleController {
     const aim = { x: lead.x + u.aimJitter.x, y: lead.y + u.aimJitter.y };
     m.aim = aim;
     const want = Math.atan2(aim.y - self.y, aim.x - self.x);
-    if (Math.abs(angleDiff(self.turret, want)) < 0.5) m.fire = { charge, aim, tolerance: 0.06 + (1 - skill) * 0.06, allowCancel: true };
+    const gap = this.tune.shotGap * (1.25 - skill * 0.5) * HZ;
+    if (tick - u.lastShotTick >= gap && Math.abs(angleDiff(self.turret, want)) < 0.5) m.fire = { charge, aim, tolerance: 0.06 + (1 - skill) * 0.06, allowCancel: true };
   }
 }

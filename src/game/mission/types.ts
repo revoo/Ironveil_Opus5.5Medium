@@ -65,6 +65,8 @@ export type Action =
   | { order: string; posture: PostureDef }
   /** Alarm at a marker/zone id (default: the player's position), optional radius in px. */
   | { alarm: true; at?: string; radius?: number }
+  /** Restore the player's tank to full health (field repairs, usually at a checkpoint). */
+  | { repair: true }
   /** Save a checkpoint; the player restarts at this marker. */
   | { checkpoint: string }
   | { choice: ChoiceDef }
@@ -83,10 +85,14 @@ export interface MissionDef {
   title: string;
   /** Level id (see src/content/levels). */
   level: string;
+  /** One line for the mission card in the menu. */
+  summary?: string;
   briefing?: string;
   /** Marker tagged player-start used at mission start (default: first player-start marker). */
   start?: string;
   playerName?: string;
+  /** How far (px) a garrison alarm reaches. Default `SIMPLE_TUNING.alarmRadius`. Smaller keeps big maps sectioned. */
+  alarmRadius?: number;
   units: UnitDef[];
   objectives: ObjectiveDef[];
   triggers: TriggerDef[];

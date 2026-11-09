@@ -66,9 +66,12 @@ input[type='range'] { width: 220px; accent-color: #a5b88d; }
 #view3d-host canvas.view3d { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: none; }
 
 /* ---- menu ---- */
-.mission-card { border: 1px solid #f1d09c; background: rgba(241, 208, 156, 0.06); padding: 12px 14px; margin: 10px 0 4px; }
+.missions { display: grid; gap: 8px; margin: 10px 0 4px; }
+.mission-card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 1px solid #2c4236; background: rgba(241, 208, 156, 0.02); padding: 10px 14px; font-weight: 400; letter-spacing: 0; opacity: 0.72; transition: opacity .15s, border-color .15s; }
+.mission-card:hover { opacity: 0.9; background: rgba(241, 208, 156, 0.04); }
+.mission-card.on { border-color: #f1d09c; background: rgba(241, 208, 156, 0.06); opacity: 1; }
 .mission-card .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #a4b6a4; }
-.mission-card .mtitle { font-size: 26px; font-weight: 700; color: #f1d09c; }
+.mission-card .mtitle { font-size: 22px; font-weight: 700; color: #f1d09c; }
 details.skirmish { margin-top: 14px; border-top: 1px solid #2c4236; padding-top: 10px; }
 details.skirmish summary { cursor: pointer; color: #a4b6a4; font-size: 15px; letter-spacing: 0.04em; }
 details.skirmish[open] summary { margin-bottom: 8px; }
