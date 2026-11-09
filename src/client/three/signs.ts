@@ -73,6 +73,10 @@ function tower(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number,
 
 /** Weathering: grime blotches, scuffs, a darker lower edge. */
 function weather(ctx: CanvasRenderingContext2D, t: Tile, r: () => number, amount = 1): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(t.x, t.y, t.w, t.h);
+  ctx.clip();
   for (let i = 0; i < 26 * amount; i++) {
     ctx.fillStyle = `rgba(30,26,20,${0.04 + r() * 0.1})`;
     ctx.beginPath();
@@ -84,6 +88,7 @@ function weather(ctx: CanvasRenderingContext2D, t: Tile, r: () => number, amount
   g.addColorStop(1, `rgba(20,18,14,${0.35 * amount})`);
   ctx.fillStyle = g;
   ctx.fillRect(t.x, t.y, t.w, t.h);
+  ctx.restore();
 }
 
 /** A torn corner (cut to transparent, so the wall shows through). */
@@ -310,22 +315,23 @@ let atlasMat: THREE.MeshStandardMaterial | null = null;
 export function signMaterial(): THREE.MeshStandardMaterial {
   if (atlasMat) return atlasMat;
   const tex = canvasTexture(1024, 1024, paintAtlas);
-  atlasMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.82, alphaTest: 0.5, side: THREE.FrontSide });
+  // a little self-light: paper and paint catch what stray light there is, so they read at night
+  atlasMat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.22, roughness: 0.82, alphaTest: 0.5, side: THREE.FrontSide });
   return atlasMat;
 }
 
 /** World size (width, height) of each sign. */
 const SIZE: Record<SignKind, [number, number]> = {
-  posterOrder: [24, 34],
-  posterPapers: [24, 34],
-  posterDefaced: [24, 34],
-  banner: [30, 120],
-  zone: [52, 16],
-  notice: [22, 28],
-  shop: [60, 15],
-  street: [28, 8.2],
-  sprayHome: [44, 11],
-  sprayLives: [72, 13],
+  posterOrder: [32, 45],
+  posterPapers: [32, 45],
+  posterDefaced: [32, 45],
+  banner: [36, 144],
+  zone: [62, 19],
+  notice: [28, 35],
+  shop: [76, 19],
+  street: [34, 10],
+  sprayHome: [58, 14.5],
+  sprayLives: [92, 17],
 };
 
 /**
@@ -361,24 +367,24 @@ export function dressBuilding(parent: THREE.Object3D, x: number, z: number, w: n
     { len: d, at: (a, o) => [x + w / 2 + o, z - a], yaw: Math.PI / 2 },
   ];
   for (const f of faces) {
-    if (f.len < 34) continue;
+    if (f.len < 40) continue;
     const half = f.len / 2 - 14;
     // posters and notices at street level, pasted in little clusters
     if (r() < 0.75) {
-      const n = 1 + Math.floor(r() * Math.min(3, f.len / 40));
-      let a = -half + 12 + r() * Math.max(0, f.len - 60 - n * 28);
+      const n = 1 + Math.floor(r() * Math.min(3, f.len / 48));
+      let a = -half + 14 + r() * Math.max(0, f.len - 70 - n * 36);
       for (let i = 0; i < n && a < half - 10; i++) {
         const kind = POSTERS[Math.floor(r() * POSTERS.length)]!;
         const [px, pz] = f.at(a, 0.45 + i * 0.02);
-        sign(parent, kind, px, 24 + r() * 4, pz, f.yaw, 1, (r() - 0.5) * 0.05);
-        a += 27 + r() * 6;
+        sign(parent, kind, px, 28 + r() * 4, pz, f.yaw, 1, (r() - 0.5) * 0.05);
+        a += 35 + r() * 6;
       }
     }
     // a banner hanging from the roofline of taller blocks
     if (h >= 96 && f.len >= 60 && r() < 0.4) {
-      const s = Math.min(1, (h - 20) / 126);
+      const s = Math.min(1, (h - 20) / 150);
       const [px, pz] = f.at((r() - 0.5) * (f.len - 50), 0.7);
-      sign(parent, 'banner', px, h - 8 - (120 * s) / 2, pz, f.yaw, s);
+      sign(parent, 'banner', px, h - 8 - (144 * s) / 2, pz, f.yaw, s);
     }
     // the resistance's reply, sprayed low on the wall
     if (r() < 0.3) {
@@ -386,16 +392,16 @@ export function dressBuilding(parent: THREE.Object3D, x: number, z: number, w: n
       const [ww] = SIZE[kind];
       if (f.len > ww + 20) {
         const [px, pz] = f.at((r() - 0.5) * (f.len - ww - 20), 0.5);
-        sign(parent, kind, px, 11 + r() * 5, pz, f.yaw, 1, (r() - 0.5) * 0.06);
+        sign(parent, kind, px, 13 + r() * 5, pz, f.yaw, 1, (r() - 0.5) * 0.06);
       }
     }
     // shop sign over a ground floor, or a street-name plate near the corner
     if (r() < 0.25 && f.len > 80) {
       const [px, pz] = f.at((r() - 0.5) * (f.len - 80), 0.5);
-      sign(parent, 'shop', px, 46, pz, f.yaw);
+      sign(parent, 'shop', px, 54, pz, f.yaw);
     } else if (r() < 0.35) {
       const [px, pz] = f.at(half - 4, 0.5);
-      sign(parent, 'street', px, 52, pz, f.yaw);
+      sign(parent, 'street', px, 58, pz, f.yaw);
     }
   }
 }
@@ -405,6 +411,6 @@ export function dressBooth(parent: THREE.Object3D, x: number, z: number, w: numb
   const r = rand(seed * 7 + 3);
   if (r() > 0.7) return;
   const front = r() < 0.5;
-  if (front && w >= 30) sign(parent, 'zone', x, 22, z + d / 2 + 0.45, 0, Math.min(1, (w - 4) / 52));
-  else if (d >= 30) sign(parent, 'zone', x + w / 2 + 0.45, 22, z, Math.PI / 2, Math.min(1, (d - 4) / 52));
+  if (front && w >= 30) sign(parent, 'zone', x, 22, z + d / 2 + 0.45, 0, Math.min(1, (w - 4) / 62));
+  else if (d >= 30) sign(parent, 'zone', x + w / 2 + 0.45, 22, z, Math.PI / 2, Math.min(1, (d - 4) / 62));
 }

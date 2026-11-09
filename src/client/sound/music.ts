@@ -3,8 +3,11 @@
 // "lookahead scheduler" pattern) so timing never depends on frame rate.
 //
 //   drone     always: low D with slow movement (the city at night)
+//   choir     always: a low male choir on the chords (an oktavist on the root an octave down, then
+//             baritones and tenors), sung on dark vowels; the Vostravan voice of the score
 //   pad       always: detuned saw chords, i – VI – iv – V (Dm, Bb, Gm, A), filter opens with tension
-//   shimmer   calm only: sparse high bell notes from D minor pentatonic
+//   shimmer   calm only: sparse high bell notes from D minor pentatonic, and now and then a low
+//             church bell tolling somewhere in the city
 //   pulse     tension: syncopated eighth-note bass on the chord root
 //   drums     combat: low hits, metallic backbeat, end-of-bar fills
 //
@@ -27,7 +30,7 @@ export type MusicMood = 'menu' | 'calm' | 'tension' | 'combat' | 'silent';
 
 export class Music {
   private bus: GainNode;
-  private layers: Record<'drone' | 'pad' | 'shimmer' | 'pulse' | 'drums', GainNode>;
+  private layers: Record<'drone' | 'choir' | 'pad' | 'shimmer' | 'pulse' | 'drums', GainNode>;
   private padFilter: BiquadFilterNode;
   private step = 0;
   private next = 0;
@@ -50,7 +53,11 @@ export class Music {
       g.connect(this.bus);
       return g;
     };
-    this.layers = { drone: mk(), pad: mk(), shimmer: mk(), pulse: mk(), drums: mk() };
+    this.layers = { drone: mk(), choir: mk(), pad: mk(), shimmer: mk(), pulse: mk(), drums: mk() };
+    // the choir sings into the hall as well
+    const send = ctx.createGain();
+    send.gain.value = 0.55;
+    this.layers.choir.connect(send).connect(reverb);
     this.padFilter = ctx.createBiquadFilter();
     this.padFilter.type = 'lowpass';
     this.padFilter.frequency.value = 500;
@@ -82,7 +89,8 @@ export class Music {
     const L = this.layers;
     const set = (g: GainNode, v: number, tc: number) => g.gain.setTargetAtTime(silent ? 0 : v, t, tc);
     set(L.drone, mood === 'menu' ? 0.5 : 0.7, 1.5);
-    set(L.pad, mood === 'menu' ? 0.55 : 0.4 + this.tension * 0.35, 1.2);
+    set(L.choir, mood === 'menu' ? 0.95 : mood === 'combat' ? 0.45 : mood === 'tension' ? 0.75 : 0.7, 2);
+    set(L.pad, mood === 'menu' ? 0.32 : 0.26 + this.tension * 0.35, 1.2);
     set(L.shimmer, mood === 'combat' ? 0 : (1 - this.tension) * 0.9, 2);
     set(L.pulse, this.combat ? 0.9 : this.tension > 0.3 ? this.tension * 0.8 : 0, this.combat ? 0.3 : 1.2);
     set(L.drums, this.combat, this.combat ? 0.25 : 2.5);
@@ -107,7 +115,9 @@ export class Music {
     const chord = Math.floor(step / 16) % 4;
     const inBar = step % 8;
     if (step % 16 === 0) this.padChord(CHORDS[chord]!, t, EIGHTH * 16);
+    if (step % 16 === 0) this.choirChord(CHORDS[chord]!, ROOTS[chord]!, t, EIGHTH * 16, chord);
     if (step % 16 === 4 && Math.random() < 0.7) this.bell(PENTA[Math.floor(Math.random() * PENTA.length)]!, t);
+    if (step === 8 && Math.random() < 0.45) this.knell(Math.random() < 0.5 ? 73.42 : 98.0, t);
     const acc = PULSE_ACCENT[inBar]!;
     if (acc > 0) this.pluck(ROOTS[chord]! * (inBar === 4 ? 2 : 1), t, acc);
     // drums
@@ -169,6 +179,100 @@ export class Music {
         o.start(t);
         o.stop(t + dur + 1.7);
       }
+    }
+  }
+
+  /**
+   * A male choir chord: four voices (oktavist on the root an octave down, a fifth above it, then
+   * the chord's root and third), each three slightly detuned saws with its own slow vibrato and a
+   * small scoop up into the note, all through one shared vowel (three formant band-passes) that
+   * drifts between "o", "a" and a dark "u" from chord to chord.
+   */
+  private choirChord(chord: number[], root: number, t: number, dur: number, index: number, dest: AudioNode = this.layers.choir, level = 1): void {
+    const c = this.ctx;
+    const VOW: [number, number, number][] = [
+      [520, 860, 2450], // o
+      [650, 1080, 2450], // a
+      [430, 780, 2350], // u (dark)
+      [560, 900, 2400],
+    ];
+    const v = VOW[index % VOW.length]!;
+    const sum = c.createGain();
+    sum.gain.value = 1;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(0.25 * level, t + 2);
+    env.gain.setValueAtTime(0.25 * level, t + dur - 1);
+    env.gain.linearRampToValueAtTime(0.0001, t + dur + 1.8);
+    for (const [i, [q, g]] of ([
+      [5, 1],
+      [8, 0.5],
+      [11, 0.16],
+    ] as const).entries()) {
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = v[i]!;
+      f.Q.value = q;
+      const fg = c.createGain();
+      fg.gain.value = g * 4;
+      sum.connect(f).connect(fg).connect(env);
+    }
+    env.connect(dest);
+    const end = t + dur + 1.9;
+    const voices = [root, root * 1.5, chord[0]!, chord[1]!];
+    voices.forEach((f0, vi) => {
+      const vib = c.createOscillator();
+      vib.frequency.value = 4.6 + Math.random() * 0.9;
+      const vg = c.createGain();
+      // vibrato blooms after the attack
+      vg.gain.setValueAtTime(0, t);
+      vg.gain.linearRampToValueAtTime(f0 * 0.009, t + 1.6);
+      vib.connect(vg);
+      const vGain = vi === 0 ? 1.25 : vi === 1 ? 0.7 : 0.85;
+      for (const det of [-9, 1, 8]) {
+        const o = c.createOscillator();
+        o.type = 'sawtooth';
+        o.detune.value = det + (Math.random() - 0.5) * 4;
+        o.frequency.setValueAtTime(f0 * 0.97, t);
+        o.frequency.linearRampToValueAtTime(f0, t + 0.3 + Math.random() * 0.2);
+        vg.connect(o.frequency);
+        const og = c.createGain();
+        og.gain.value = vGain / 3;
+        o.connect(og).connect(sum);
+        o.start(t);
+        o.stop(end);
+      }
+      vib.start(t);
+      vib.stop(end);
+    });
+  }
+
+  /** A low church bell somewhere across the city: inharmonic partials, a minor-third hum, a long tail. */
+  private knell(f: number, t: number, dest: AudioNode = this.layers.shimmer): void {
+    const c = this.ctx;
+    for (const [ratio, gain, len] of [
+      [0.5, 0.05, 7],
+      [1, 0.06, 5],
+      [1.19, 0.035, 4], // the minor third that makes a bell sound like a bell
+      [1.5, 0.02, 3],
+      [2, 0.025, 3],
+      [2.67, 0.012, 2],
+    ] as const) {
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f * ratio;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      const far = c.createBiquadFilter();
+      far.type = 'lowpass';
+      far.frequency.value = 1400;
+      o.connect(far).connect(g);
+      g.connect(dest);
+      g.connect(this.reverb);
+      o.start(t);
+      o.stop(t + len + 0.1);
     }
   }
 
@@ -321,10 +425,13 @@ export class Music {
         break;
       case 'success':
         chord([146.83, 220, 293.66, 369.99], 'triangle', 4.5, 0.05, 0.6); // D major: the score finally resolves
+        this.choirChord([146.83, 185.0], 73.42, t, 4, 1, this.bus, 1.2); // and the choir with it
         this.bell(1174.66, t + 0.4, this.bus);
+        this.knell(73.42, t + 0.2, this.bus);
         break;
       case 'failure':
         chord([73.42, 77.78, 110], 'sawtooth', 4, 0.05, 0.3);
+        this.choirChord([146.83, 174.61], 73.42, t, 3.5, 2, this.bus, 1);
         break;
     }
   }
