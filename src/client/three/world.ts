@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Terrain, tileAt } from '../../sim/map';
 import type { Level } from '../../level/load';
 import { procUniforms } from './materials';
+import { dressBooth, dressBuilding } from './signs';
 import { barrel, barrier, building, bushGeometries, lamp, makeMaterials, mergeStatic, rand, railcar, wallRun, windowsMesh, type LampView, type WindowInstance } from './models';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -197,9 +198,11 @@ export function buildWorld(scene: THREE.Scene, level: Level): BuiltWorld {
       wallRun(staticRoot, m, x, z, horiz ? w : d, T * 0.8, horiz, 70, seed);
     } else if (rc.w * rc.h <= 4) {
       building(staticRoot, m, x, z, w - 4, d - 4, 38, seed, wins); // guard booth / bunker
+      dressBooth(staticRoot, x, z, w - 4, d - 4, seed);
     } else {
       const h = 80 + Math.floor(rand(seed)() * 7) * 16;
       building(staticRoot, m, x, z, w - 2, d - 2, h, seed, wins);
+      dressBuilding(staticRoot, x, z, w - 2, d - 2, h, seed);
     }
   }
 

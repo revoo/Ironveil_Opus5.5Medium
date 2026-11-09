@@ -4,7 +4,7 @@
 // urgent lines), `.eyes` (blink), and three mouth shapes `.m0` closed, `.m1` half open, `.m2` open.
 // The comms panel picks the mouth from the voice plan, so lips move with the synthesised speech.
 
-import { LORE } from '../../content/lore';
+import { CREW, LORE, displayName } from '../../content/lore';
 
 const INK = '#151513';
 const PAPER = '#e4d9c1';
@@ -21,17 +21,14 @@ export interface Speaker {
   role: string;
 }
 
-// Tags and roles are in our crew's language (Cyrillic); names stay English so subtitles read.
-const SPEAKERS: Record<string, Speaker> = {
-  Commander: { tag: 'КОМ', name: 'Commander', role: 'командир' },
-  Driver: { tag: 'МВ', name: 'Driver', role: 'механик-водитель' },
-  Gunner: { tag: 'НАВ', name: 'Gunner', role: 'наводчик' },
-  Loader: { tag: 'ЗАР', name: 'Loader', role: 'заряжающий' },
-};
+// Tags and roles are in our crew's language (Cyrillic); names stay Latin so subtitles read.
+const TAGS: Record<string, string> = { Commander: 'КОМ', Driver: 'МВ', Gunner: 'НАВ', Loader: 'ЗАР' };
 
 export function speaker(from: string, enemy: boolean): Speaker {
   if (enemy) return { tag: 'ВРАГ', name: from.replace(/\s*\(enemy\)$/, ''), role: LORE.them.native };
-  return SPEAKERS[from] ?? { tag: from.slice(0, 3).toUpperCase(), name: from, role: 'радиосеть' };
+  const c = CREW[from];
+  if (c) return { tag: TAGS[from]!, name: displayName(from), role: `${c.roleNative} · ${from.toLowerCase()}` };
+  return { tag: from.slice(0, 3).toUpperCase(), name: from, role: 'радиосеть' };
 }
 
 /** A five-pointed star (our side's mark), centred at (cx, cy). */

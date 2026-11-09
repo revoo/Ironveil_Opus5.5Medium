@@ -26,3 +26,30 @@ export const LORE = {
     army: 'Directorate Border Troops',
   },
 } as const;
+
+export interface CrewMember {
+  /** Full name, rank abbreviation and surname (English text). */
+  name: string;
+  rank: string;
+  surname: string;
+  /** What the crew call them. */
+  nick: string;
+  /** Surname in Cyrillic. */
+  native: string;
+  /** Crew position in our language. */
+  roleNative: string;
+}
+
+/** The crew of tank 412, keyed by the `from` id used in mission data. */
+export const CREW: Record<string, CrewMember> = {
+  Commander: { name: 'Oleg Rusakov', rank: 'Lt.', surname: 'Rusakov', nick: 'Rusakov', native: 'Русаков', roleNative: 'командир' },
+  Driver: { name: 'Pavel Gromov', rank: 'Sgt.', surname: 'Gromov', nick: 'Pasha', native: 'Громов', roleNative: 'механик-водитель' },
+  Gunner: { name: 'Vera Lisitsyna', rank: 'Cpl.', surname: 'Lisitsyna', nick: 'Vera', native: 'Лисицына', roleNative: 'наводчица' },
+  Loader: { name: 'Bogdan Kuzmich', rank: 'Pvt.', surname: 'Kuzmich', nick: 'Bogdan', native: 'Кузьмич', roleNative: 'заряжающий' },
+};
+
+/** How a radio speaker is named on screen: "Lt. Rusakov" for the crew, the id otherwise. */
+export function displayName(from: string): string {
+  const c = CREW[from];
+  return c ? `${c.rank} ${c.surname}` : from;
+}

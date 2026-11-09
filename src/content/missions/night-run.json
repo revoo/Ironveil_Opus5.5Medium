@@ -31,7 +31,7 @@
       "id": "intro",
       "when": { "after": 1 },
       "do": [
-        { "radio": "Long way round tonight. Yard, market, canal, then the depot.", "from": "Commander" },
+        { "radio": "Long way round tonight, comrades. Yard, market, canal, then their depot.", "from": "Commander" },
         { "radio": "One patrol on the road ahead. Hedges both sides if we'd rather not meet it.", "from": "Driver", "delay": 4 }
       ]
     },
@@ -46,7 +46,7 @@
       "do": [
         { "checkpoint": "cp_yard" },
         { "repair": true },
-        { "radio": "Rail yard. Guard on the road gate, another walking the sidings.", "from": "Gunner" },
+        { "radio": "Rail yard. Border troops on the road gate, another walking the sidings.", "from": "Gunner" },
         { "radio": "Fence is down along the south side. All overgrown.", "from": "Driver", "delay": 3.5 }
       ]
     },
@@ -63,7 +63,7 @@
         { "objective": "o_market", "state": "active" },
         { "checkpoint": "cp_turn" },
         { "repair": true },
-        { "radio": "Clear of the yard. Loader, patch what you can.", "from": "Commander" },
+        { "radio": "Clear of the yard. Bogdan, patch what you can.", "from": "Commander" },
         { "radio": "Market's west of here. There's a back alley behind the shops.", "from": "Driver", "delay": 3.5 }
       ]
     },
@@ -97,7 +97,7 @@
         { "objective": "o_depot", "state": "active" },
         { "checkpoint": "cp_bend" },
         { "repair": true },
-        { "radio": "Last stretch. Road block at the wall ahead.", "from": "Gunner" },
+        { "radio": "Last stretch. Directorate road block at the Wall ahead.", "from": "Gunner" },
         { "radio": "North end of that wall's collapsed. Overgrown, we'd fit.", "from": "Driver", "delay": 3.5 }
       ]
     },
@@ -135,7 +135,7 @@
       "do": [
         { "objective": "o_depot", "state": "complete" },
         { "objective": "stay_hidden", "state": "complete" },
-        { "end": "success", "text": "Across the whole district without a shot. Nobody knows we were here." }
+        { "end": "success", "text": "Across the whole district without a shot. Not one stamp in their ledgers." }
       ]
     },
     {

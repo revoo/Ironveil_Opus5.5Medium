@@ -54,8 +54,8 @@
       "id": "intro",
       "when": { "after": 1 },
       "do": [
-        { "radio": "Long night ahead. All the way across the city, fortress at the far end.", "from": "Commander" },
-        { "radio": "Allotments first. Somebody walks the road between the hedges.", "from": "Driver", "delay": 4.5 }
+        { "radio": "Long night ahead, comrades. Clear across their city, the Directorate's fortress at the far end. Then home.", "from": "Commander" },
+        { "radio": "Allotments first, Comrade Lieutenant. One of their border troops walks the road between the hedges.", "from": "Driver", "delay": 4.5 }
       ]
     },
     {
@@ -69,14 +69,14 @@
       "do": [
         { "checkpoint": "cp_oldtown" },
         { "repair": true },
-        { "radio": "Old town. Narrow streets, short sightlines. Whoever we meet, we meet up close.", "from": "Gunner" },
+        { "radio": "Old town. My grandmother was born here, before the Wall. Narrow streets, short sightlines. Whoever we meet, we meet up close.", "from": "Gunner" },
         { "radio": "The church blocks the main street. Round the north or through the lanes south.", "from": "Driver", "delay": 4 }
       ]
     },
     {
       "id": "oldtown",
       "when": { "enter": "oldtown" },
-      "do": [{ "radio": "Slow at the corners.", "from": "Commander" }]
+      "do": [{ "radio": "Slow at the corners, Pasha.", "from": "Commander" }]
     },
     {
       "id": "cp_boulevard",
@@ -86,7 +86,7 @@
         { "objective": "o_boulevard", "state": "active" },
         { "checkpoint": "cp_boulevard" },
         { "repair": true },
-        { "radio": "Boulevard. Two tanks running laps round the arcade.", "from": "Gunner" },
+        { "radio": "Boulevard. Two Directorate tanks running laps round the arcade.", "from": "Gunner" },
         { "radio": "Let them pass, then cross behind. Verges have cover both sides.", "from": "Commander", "delay": 4 }
       ]
     },
@@ -105,7 +105,7 @@
         { "checkpoint": "cp_factory" },
         { "repair": true },
         { "radio": "Factory district. Gate on the road, one walking the yard.", "from": "Gunner" },
-        { "radio": "There's a signal truck parked in the yard. If they spot us later, that's who calls the fortress.", "from": "Loader", "delay": 4.5 },
+        { "radio": "There's a signal truck in the yard. If they spot us later, that's who calls the fortress. In triplicate.", "from": "Loader", "delay": 4.5 },
         { "radio": "Alleys run behind the halls, north and south. Your call.", "from": "Commander", "delay": 9 }
       ]
     },
@@ -119,7 +119,7 @@
       "when": { "destroyed": "signal_truck" },
       "do": [
         { "objective": "opt_truck", "state": "complete" },
-        { "radio": "Signal truck's down. Nobody's calling the fortress tonight.", "from": "Loader" }
+        { "radio": "Signal truck's down. Let them file a complaint.", "from": "Loader" }
       ]
     },
     {
@@ -137,7 +137,7 @@
     {
       "id": "river",
       "when": { "enter": "river" },
-      "do": [{ "radio": "Steady. Keep the revs down on the water.", "from": "Commander" }]
+      "do": [{ "radio": "Steady, Pasha. Keep the revs down on the water.", "from": "Commander" }]
     },
     {
       "id": "cp_park",
@@ -148,7 +148,7 @@
         { "checkpoint": "cp_park" },
         { "repair": true },
         { "radio": "The park's clear. Breathe. Road turns south at the far side.", "from": "Commander" },
-        { "radio": "Halfway. Engine's holding.", "from": "Driver", "delay": 5 }
+        { "radio": "Halfway. Engine's holding. Vostravan steel, Comrade Lieutenant.", "from": "Driver", "delay": 5 }
       ]
     },
     {
@@ -169,7 +169,7 @@
         { "objective": "o_border", "state": "active" },
         { "checkpoint": "cp_border" },
         { "repair": true },
-        { "radio": "Border checkpoint. Two on the gate.", "from": "Gunner" },
+        { "radio": "Border checkpoint. Two on the gate, stamping papers nobody will ever read.", "from": "Gunner" },
         { "radio": "Wall's breached south, through the rubble. Someone walks the ruins behind it.", "from": "Driver", "delay": 4 }
       ]
     },
@@ -217,7 +217,7 @@
                   { "setFlag": "flare", "value": "gate" },
                   { "order": "fo_culvert", "posture": { "guard": "fo_flare_gate" } },
                   { "radio": "Flare's away. Culvert watch is moving up.", "from": "Loader" },
-                  { "radio": "Mud and darkness it is. Driver, south.", "from": "Commander", "delay": 3 }
+                  { "radio": "Mud and darkness it is. Pasha, south.", "from": "Commander", "delay": 3 }
                 ]
               },
               {
@@ -232,7 +232,7 @@
     {
       "id": "fortress",
       "when": { "enter": "fortress" },
-      "do": [{ "radio": "Inside. Extraction's the west yard, past the keep.", "from": "Commander" }]
+      "do": [{ "radio": "Inside their fortress. Extraction's the west yard, past the keep. Then we go home.", "from": "Commander" }]
     },
     {
       "id": "fortress_reinforced",
@@ -256,7 +256,7 @@
       "do": [
         { "objective": "o_fortress", "state": "complete" },
         { "objective": "stay_hidden", "state": "complete" },
-        { "end": "success", "text": "Across the whole city and out the back of their fortress. Nobody saw a thing." }
+        { "end": "success", "text": "Across the whole city and out the back of their fortress. Nobody saw a thing. The Directorate will be filing reports for a month." }
       ]
     },
     {
@@ -264,7 +264,7 @@
       "when": { "all": [{ "enter": "extraction" }, { "alarm": true }] },
       "do": [
         { "objective": "o_fortress", "state": "complete" },
-        { "end": "success", "text": "We made it out. The whole city knows we were here." }
+        { "end": "success", "text": "We made it out. The whole city knows a Vostravan tank was here." }
       ]
     }
   ]

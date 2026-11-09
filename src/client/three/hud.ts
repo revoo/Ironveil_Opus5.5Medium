@@ -18,6 +18,7 @@ import type { MissionSession } from '../../game/mission/session';
 import type { Observation, TankView } from '../../sim/observation';
 import { WEAPON_TICKS, shotStats } from '../../sim/weapon';
 import { TUNING } from '../../sim/tuning';
+import { displayName } from '../../content/lore';
 
 const ICON = {
   smoke: '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.2 9.2 4.4 4.4 0 0 0 7 18z"/></svg>',
@@ -209,7 +210,7 @@ export class Hud3D {
       this.root.classList.toggle('choosing', !!c);
       if (c)
         choice.innerHTML = `<div class="timer"><i></i></div>
-          <div class="who"><b>Приказ</b>${esc(c.from ?? 'Crew')} · Decision</div>
+          <div class="who"><b>Приказ</b>${esc(c.from ? displayName(c.from) : 'Crew')} · Decision</div>
           <div class="prompt">${esc(c.prompt)}</div>
           ${c.options.map((o, i) => `<div class="opt${i === c.defaultIndex ? ' def' : ''}"><kbd>${i + 1}</kbd><span>${esc(o)}</span></div>`).join('')}`;
     }

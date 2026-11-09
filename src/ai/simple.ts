@@ -78,20 +78,20 @@ export type BarkKind =
 
 /** Line pools. Picked deterministically (no RNG draw), so barks never change the simulation. */
 export const BARK_LINES: Record<BarkKind, readonly string[]> = {
-  sawSomething: ['Hm? Movement.', 'Did something move out there?', 'Eyes up. I saw something.', 'Wait… what was that?'],
+  sawSomething: ['Hm? Movement.', 'Did something move out there?', 'Eyes up. I saw something.', 'Wait… what was that?', 'Halt! Who goes there?'],
   heardSomething: ['You hear that?', 'Engine noise. Close.', "Something's out there.", 'Quiet. Listen.'],
   heardShot: ['Gunfire!', 'Shots fired!', 'That was a cannon!'],
-  investigate: ['Going to check it out.', 'Moving to investigate.', "I'll take a look.", 'Checking it out.'],
-  nothing: ['Must have been nothing.', 'Just the wind.', 'Nothing here. Back to it.', 'Jumpy tonight…'],
-  spotted: ['Enemy spotted!', 'Contact! Engaging!', 'Tank! Right there!', 'Hostile in sight!'],
+  investigate: ['Going to check it out.', 'Moving to investigate.', "I'll take a look.", 'Checking it out.', 'Logging it. Moving to inspect.'],
+  nothing: ['Must have been nothing.', 'Just the wind.', 'Nothing here. Back to it.', 'Jumpy tonight…', 'Nothing. No report necessary.'],
+  spotted: ['Enemy spotted!', 'Contact! Engaging!', 'Tank! Right there!', 'Hostile in sight!', 'Vostravan tank! Inside the Wall!'],
   hit: ["I've been hit!", 'Taking fire!', "I'm hit! Where'd that come from?", 'Armour hit!'],
   heavyHit: ["I've sustained major damage!", 'Major damage! Armour breached!', 'That went right through us!', "Heavy round! We're burning!"],
   critical: ['Hull breached!', "I can't take another one!", 'Need support, now!'],
   reloading: ['Reloading!', 'Loading!', 'Reloading, cover me!'],
   lost: ['Lost them. Searching.', 'Where did they go?', 'Lost visual!'],
-  giveUp: ["They're gone. Stay sharp.", 'Area clear… for now.', 'Back to your posts.'],
+  giveUp: ["They're gone. Stay sharp.", 'Area clear… for now.', 'Back to your posts.', 'Back to your posts. Reports by dawn.'],
   support: ['Copy, moving to support.', 'On my way!', 'Moving up!'],
-  allyDown: ['Man down!', "They got one of ours!", 'We lost a tank!'],
+  allyDown: ['Man down!', "They got one of ours!", 'We lost a tank!', 'Tank lost! Notify the Directorate!'],
 };
 
 export type BarkTone = 'calm' | 'sus' | 'combat';

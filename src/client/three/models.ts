@@ -67,12 +67,40 @@ function graffitiTexture(seed: number): THREE.CanvasTexture {
       }
       ctx.stroke();
     }
+    // the Directorate paints over what it finds; the resistance writes it again
+    if (r() < 0.4) {
+      ctx.fillStyle = `rgba(${150 + r() * 20},${148 + r() * 20},${140 + r() * 15},0.9)`;
+      ctx.fillRect(r() * 120, 60 + r() * 60, 100 + r() * 90, 60 + r() * 60);
+    }
+    const words = ['ДОМОЙ', 'ВОСТРАВА', 'СВОБОДА', 'НЕ ЗАБУДЕМ', 'ДОМОЙ'];
+    if (r() < 0.75) {
+      ctx.save();
+      ctx.translate(128, 120 + r() * 70);
+      ctx.rotate((r() - 0.5) * 0.3);
+      ctx.fillStyle = r() < 0.6 ? 'rgba(178,40,30,0.88)' : 'rgba(28,28,28,0.82)';
+      const word = words[Math.floor(r() * words.length)]!;
+      ctx.font = `900 ${word.length > 7 ? 34 : 46}px "Arial Narrow", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(word, 0, 0, 230);
+      ctx.restore();
+    }
+    if (r() < 0.35) {
+      ctx.fillStyle = 'rgba(178,40,30,0.85)';
+      const cx = 40 + r() * 176, cy = 50 + r() * 40, R = 18 + r() * 10;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        ctx.lineTo(cx + Math.cos(a) * (i % 2 ? R * 0.4 : R), cy + Math.sin(a) * (i % 2 ? R * 0.4 : R));
+      }
+      ctx.fill();
+    }
   });
 }
 
 export function makeMaterials() {
   return {
-    wallVariants: [1, 2, 3, 4].map((s) => proc(new THREE.MeshStandardMaterial({ map: graffitiTexture(s * 97), roughness: 0.92 }), Surface.Concrete, { scale: 0.07, bump: 0.8 })),
+    wallVariants: [1, 2, 3, 4, 5, 6].map((s) => proc(new THREE.MeshStandardMaterial({ map: graffitiTexture(s * 97), roughness: 0.92 }), Surface.Concrete, { scale: 0.07, bump: 0.8 })),
     wallPlain: proc(new THREE.MeshStandardMaterial({ color: 0xbfbcb1, roughness: 0.92 }), Surface.Concrete, { scale: 0.07, bump: 0.8 }),
     cap: proc(new THREE.MeshStandardMaterial({ color: 0xc9c7bc, roughness: 0.8 }), Surface.Concrete, { scale: 0.1, bump: 0.4 }),
     building: proc(new THREE.MeshStandardMaterial({ color: 0x5d6461, roughness: 0.9 }), Surface.Concrete, { scale: 0.05 }),
@@ -93,7 +121,7 @@ export function makeMaterials() {
 export type Materials = ReturnType<typeof makeMaterials>;
 
 // ---------------------------------------------------------------- walls & buildings
-/** A straight run of Berlin-wall slabs (L foot, pipe cap) centred at (cx, cz). */
+/** A straight run of the Directorate's wall slabs (L foot, pipe cap) centred at (cx, cz). */
 export function wallRun(parent: THREE.Object3D, m: Materials, cx: number, cz: number, len: number, thick: number, horiz: boolean, height: number, seed: number): void {
   const r = rand(seed);
   const n = Math.max(1, Math.round(len / 40));
