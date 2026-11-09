@@ -60,7 +60,7 @@ Units **bark** as they react: noticing something, going to investigate, spotting
 reloading, losing you, giving up, or seeing a comrade destroyed. The 3D view shows each line as a
 callout over the speaker, only while that tank is visible to you; they are not radio subtitles.
 Each visible bark also plays as a short radio burst panned to the speaker (squelch, crackle, a
-voice-like murmur), flavoured by situation: priority beeps on contact, static and dropouts when hit,
+synthesised indistinct voice, see `sound/voice.ts`), flavoured by situation: priority beeps on contact, static and dropouts when hit,
 a softer key-up when calm, plus the breech clank on "Reloading!". Lines live in
 `BARK_LINES` and are picked without drawing from the AI's RNG, so barks never change the simulation.
 

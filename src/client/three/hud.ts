@@ -5,7 +5,8 @@
 //   top-left      operation title + objectives (completed ones fold away)
 //   top-centre    detection: a slim meter that is nearly invisible while you are hidden
 //   top-right     minimap (owned by the view)
-//   bottom-left   radio as subtitles, then a slim hull gauge with smoke / silent / brush chips
+//   bottom-centre the comms panel (`comms.ts`, owned by the view): crew radio with portraits
+//   bottom-left   a slim hull gauge with smoke / silent / brush chips
 //   bottom-right  real-time decisions
 //   cursor        reload / charge / hold ring; while charging the damage it will do, and LETHAL
 //                 when that kills the enemy under the cursor
@@ -37,7 +38,6 @@ export class Hud3D {
   readonly root: HTMLDivElement;
   private q = <T extends Element>(sel: string) => this.root.querySelector(sel) as T;
   private objKey = '';
-  private radioKey = '';
   private toastKey = '';
   private choiceKey = '';
   private markerKey = '';
@@ -55,7 +55,6 @@ export class Hud3D {
       <section class="h3-obj"><div class="h3-op">Operation</div><div class="h3-title"></div><ul></ul></section>
       <section class="h3-det"><div class="lbl">Hidden</div><div class="track"><i></i></div></section>
       <section class="h3-toasts"></section>
-      <section class="h3-radio"></section>
       <section class="h3-status">
         <div class="hull"><span class="cap">Hull</span><div class="segs">${'<b></b>'.repeat(10)}</div><span class="num">100</span></div>
         <div class="gun"><span class="cap">Cannon</span><div class="bar"><i class="fill"></i><i class="burst" style="left:${TUNING.cannon.splashFrom * 100}%"></i></div><span class="dmg"><b>22</b><small>dmg</small></span><span class="st">Ready</span></div>
@@ -130,25 +129,6 @@ export class Hud3D {
       this.toastKey = tk;
       this.q('.h3-toasts').innerHTML = toasts.map((n) => `<div class="toast">${esc(n.text)}</div>`).join('');
     }
-
-    // ---- radio as subtitles
-    const lines = s.radio.filter((r) => tick - r.tick < 30 * 8).slice(-4);
-    const rk = lines.map((r) => r.tick + r.from + r.text).join('|');
-    if (rk !== this.radioKey) {
-      this.radioKey = rk;
-      this.q('.h3-radio').innerHTML = lines
-        .map((r) => {
-          const enemy = r.from.endsWith('(enemy)');
-          return enemy
-            ? `<p class="int" data-t="${r.tick}"><span class="who">Intercept · ${esc(r.from.replace(' (enemy)', ''))}</span>${esc(r.text)}</p>`
-            : `<p class="crew" data-t="${r.tick}"><span class="who">${esc(r.from)}</span>${esc(r.text)}</p>`;
-        })
-        .join('');
-    }
-    this.root.querySelectorAll<HTMLElement>('.h3-radio p').forEach((p) => {
-      const age = (tick - Number(p.dataset.t)) / 30;
-      p.style.opacity = String(age > 7 ? Math.max(0, 1 - (age - 7)) : 1);
-    });
 
     // ---- vehicle status
     const status = this.q<HTMLElement>('.h3-status');
@@ -226,9 +206,10 @@ export class Hud3D {
     if (ck !== this.choiceKey) {
       this.choiceKey = ck;
       choice.classList.toggle('show', !!c);
+      this.root.classList.toggle('choosing', !!c);
       if (c)
         choice.innerHTML = `<div class="timer"><i></i></div>
-          <div class="who">${esc(c.from ?? 'Crew')} · Decision</div>
+          <div class="who"><b>Befehl</b>${esc(c.from ?? 'Crew')} · Decision</div>
           <div class="prompt">${esc(c.prompt)}</div>
           ${c.options.map((o, i) => `<div class="opt${i === c.defaultIndex ? ' def' : ''}"><kbd>${i + 1}</kbd><span>${esc(o)}</span></div>`).join('')}`;
     }

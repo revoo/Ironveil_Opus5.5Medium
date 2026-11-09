@@ -3,6 +3,7 @@
 import type { Settings } from './settings';
 import { Music, type MusicMood } from './sound/music';
 import { Radio, type BarkFlavour } from './sound/radio';
+import type { Utterance, VoiceProfile } from './sound/voice';
 import type { BarkKind } from '../ai/simple';
 import { Ambience, type AmbienceScene } from './sound/ambience';
 
@@ -139,10 +140,17 @@ export class AudioEngine {
     if (kind === 'spotted') this.score?.duck(0.3, 1.2);
   }
 
-  radioLine(from: string, text: string, enemy: boolean): void {
-    if (!this.radio || !this.score) return;
-    const d = this.radio.line(from, text, enemy);
-    if (!enemy) this.score.duck(0.35, d);
+  /** A dialogue line the comms panel has just put on air (the panel owns timing and queue). */
+  transmit(u: Utterance, voice: VoiceProfile, enemy: boolean): void {
+    if (!this.radio || !this.score || this.ctx?.state !== 'running') return;
+    const d = this.radio.transmit(u, voice, enemy);
+    this.score.duck(enemy ? 0.6 : 0.35, d);
+  }
+
+  /** Faint traffic between other units. Returns its length in seconds (0 if silent). */
+  netChatter(): number {
+    if (!this.radio || this.ctx?.state !== 'running') return 0;
+    return this.radio.netChatter();
   }
 
   /** A garrison bark from a visible enemy: radio burst at its position, plus any world foley. */

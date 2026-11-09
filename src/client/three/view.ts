@@ -25,6 +25,7 @@ import { buildTank, radialTexture, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
 import { CueArcs, Decals, Flashes, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
 import { Blasts } from './blast';
+import { Comms } from './comms';
 import { Hud3D } from './hud';
 import { Telemetry } from './telemetry';
 import { codeLabel } from '../settings';
@@ -125,6 +126,9 @@ export class MissionView3D {
   private disposed = false;
   private lampFlick = 1;
   private hud: Hud3D;
+  private comms: Comms;
+  /** When the next bit of distant net traffic may play (performance.now ms). */
+  private nextNet = performance.now() + 9000;
   private telemetry: Telemetry;
   private minimap: HTMLCanvasElement;
   private miniBase: HTMLCanvasElement;
@@ -229,6 +233,8 @@ export class MissionView3D {
 
     // ---- DOM: vehicle panel, radio, minimap, enemy alert markers
     this.hud = new Hud3D(container, this.session);
+    this.comms = new Comms(this.hud.root, (l, u, v) => this.d.audio.transmit(u, v, l.enemy));
+    this.comms.setVisible(d.settings.showRadio);
     this.telemetry = new Telemetry(this.hud.root, this.renderer);
     this.telemetry.setKeyLabel(codeLabel(d.settings.bindings.telemetry[0] ?? 'KeyV'));
     this.minimap = document.createElement('canvas');
@@ -484,6 +490,7 @@ export class MissionView3D {
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.telemetry.dispose();
+    this.comms.dispose();
     this.hud.dispose();
     this.minimap.remove();
   }
@@ -572,6 +579,7 @@ export class MissionView3D {
     if (full && !this.wasFull) this.d.audio.chargeFull();
     this.wasFull = full;
     this.hud.update(cur, me, this.mousePx, this.aim, (x, y, h) => this.project(x, y, h), dt);
+    this.comms.update(dt, s.paused);
     this.directAudio(now);
     this.renderMinimap(cur, selfPos);
     const tEnd = performance.now();
@@ -589,12 +597,19 @@ export class MissionView3D {
     const s = this.session;
     const a = this.d.audio;
     if (s.paused) return;
-    // radio: every new subtitle line gets squelch, static and murmur
+    // radio: every new line goes to the comms panel, which voices it when its turn comes
     for (const r of s.radio) {
       const key = `${r.tick}|${r.from}|${r.text}`;
       if (this.heardRadio.has(key)) continue;
       this.heardRadio.add(key);
-      a.radioLine(r.from, r.text, r.from.endsWith('(enemy)'));
+      const enemy = r.from.endsWith('(enemy)');
+      this.comms.push({ from: enemy ? r.from.replace(/\s*\(enemy\)$/, '') : r.from, text: r.text, enemy });
+    }
+    // other units on the net, faint, between our own lines
+    if (!s.outcome && this.comms.idle && now > this.nextNet) {
+      const d = a.netChatter();
+      if (d > 0) this.comms.netTraffic(d);
+      this.nextNet = now + 14000 + Math.random() * 26000;
     }
     // barks: heard only from enemies you can see (the same rule as their callouts)
     const obs = s.obs;

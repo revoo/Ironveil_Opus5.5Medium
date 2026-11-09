@@ -56,8 +56,12 @@ npm run build && npm run preview     # production build on http://localhost:4173
 - **Combat feedback**: armour hits glow and throw spall, damaged tanks smoke and then burn, enemy
   health bars and a cursor hit marker. A kill is a fireball with a shockwave and debris, the turret
   blown off, two to five ammunition cook-offs, and a wreck that burns for half a minute.
-- **Audio**, all synthesised: an adaptive score that follows detection, radio treatment for crew
-  lines, night-city ambience, urban reverb.
+- **Comms panel**: crew radio as a Cold-War Berlin dialogue box at the bottom centre, with a
+  halftone portrait per crew member whose mouth moves with the voice, the line typed out as it is
+  spoken, a level meter, a queue, and intercepted enemy traffic stamped *Abgehört*.
+- **Audio**, all synthesised: an adaptive score that follows detection, indistinct speech-shaped
+  radio voices (one per crew member) with press-to-talk, squelch and engine bleed, faint traffic
+  from other units on the net, night-city ambience, urban reverb.
 
 ## Project layout
 
