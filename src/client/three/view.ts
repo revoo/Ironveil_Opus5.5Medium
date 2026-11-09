@@ -29,6 +29,7 @@ import { Comms } from './comms';
 import { Hud3D } from './hud';
 import { Telemetry } from './telemetry';
 import { LampLights } from './lamps';
+import { DynamicResolution } from './dynres';
 import { codeLabel } from '../settings';
 
 export interface MissionViewDeps {
@@ -103,6 +104,7 @@ export class MissionView3D {
   private chargeLight = new THREE.PointLight(0xffb060, 0, 180, 2);
   private lampLights!: LampLights;
   private lampK: number[] = [];
+  private dynRes = new DynamicResolution();
   private wasFull = false;
   private frameDt = 0;
   private ghosts: THREE.Mesh[] = [];
@@ -341,11 +343,15 @@ export class MissionView3D {
     const w = this.container.clientWidth || innerWidth, h = this.container.clientHeight || innerHeight;
     // Retina screens report 2: at full DPR every effect pass runs on 4x the pixels for a sharpness
     // that the film grain and bloom mostly hide. High stops at 1.5, Low renders at CSS pixels.
-    const dpr = Math.min(devicePixelRatio, this.d.settings.lowEffects ? 1 : 1.5);
+    // Dynamic resolution scales that down when frames run long (never below 0.75 of a CSS pixel).
+    const base = Math.min(devicePixelRatio, this.d.settings.lowEffects ? 1 : 1.5);
+    const dpr = Math.max(Math.min(base, 0.75), base * this.dynRes.scale);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h);
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(w, h);
+    // ambient occlusion is soft by nature: compute it at half resolution (a quarter of the pixels)
+    this.gtao.setSize(Math.round((w * dpr) / 2), Math.round((h * dpr) / 2));
     this.bloom.resolution.set((w * dpr) / 2, (h * dpr) / 2);
     (this.grade.uniforms.uRes as { value: THREE.Vector2 }).value.set(w * dpr, h * dpr);
     this.minimap.width = 196;
@@ -534,6 +540,8 @@ export class MissionView3D {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     const t0 = performance.now();
     this.telemetry.frameStart(now);
+    if (this.dynRes.update(now - this.last)) this.resize();
+    this.telemetry.resScale = this.dynRes.scale;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.frameDt = dt;
     this.last = now;

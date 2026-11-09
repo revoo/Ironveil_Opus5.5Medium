@@ -40,6 +40,8 @@ export class Telemetry {
   private head = 0;
   private filled = 0;
   private prevNow = -1;
+  /** Dynamic resolution scale, set by the view each frame. */
+  resScale = 1;
   private hitches = 0;
   private worstMs = 0;
   // window accumulators (reset on every flush)
@@ -212,7 +214,7 @@ export class Telemetry {
       `GPU      ${gpu}`,
       `Draws    ${pad(String(info.render.calls), 5)}  tris ${kfmt(info.render.triangles)}`,
       `Shaders  ${pad(String(info.programs?.length ?? 0), 5)}  geo ${info.memory.geometries}  tex ${info.memory.textures}`,
-      `Res      ${size.x}×${size.y}  @${this.renderer.getPixelRatio().toFixed(2)}x`,
+      `Res      ${size.x}×${size.y}  @${this.renderer.getPixelRatio().toFixed(2)}x  dyn ${Math.round(this.resScale * 100)}%`,
       `Hitches  ${pad(String(this.hitches), 5)}  worst ${f1(this.worstMs)} ms`,
     ];
     if (heap !== undefined) rows.push(`Heap     ${(heap / 1048576).toFixed(0)} MB`);
