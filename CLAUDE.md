@@ -64,6 +64,11 @@ npm run dev         # http://localhost:5173
   lights are pooled up front so fights never create materials or change the light count (shader recompiles).
   Garrison tanks have `GARRISON_HP` (60, `game/mission/session.ts`); tanks carry `maxHp`, so never assume 100.
 - `V` toggles the performance telemetry overlay (`three/telemetry.ts`); it sets `renderer.info.autoReset = false`.
+- Playtest perf log (`three/perflog.ts`): in the owner's preview artifact the game writes 2 s samples and
+  stutters to the artifact's private db (`perf/<session>` + `perf/<session>/chunks/<n>`, rules: admin only).
+  Read them with ArtifactData (`list` collection `perf`, then the chunks). Does nothing outside the artifact.
+  The preview must keep `capabilities: {db: {rules: [{path: "perf", read: "admin", write: "admin"}]}, user: {}}`
+  (omit `capabilities` on republish to keep it).
 - Audio only starts after a user gesture (`audio.unlock()` on first pointer/key). `audio.tap()`
   exposes the final mix for recording previews.
 - Debug hook in the browser: `window.__ironveil` → `{ game, hud, settings, audio, mission(), view() }` (`view().aim` is the world point under the cursor).

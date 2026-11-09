@@ -30,6 +30,7 @@ import { Hud3D } from './hud';
 import { Telemetry } from './telemetry';
 import { LampLights } from './lamps';
 import { DynamicResolution } from './dynres';
+import { PerfLog } from './perflog';
 import { codeLabel } from '../settings';
 
 export interface MissionViewDeps {
@@ -105,6 +106,8 @@ export class MissionView3D {
   private lampLights!: LampLights;
   private lampK: number[] = [];
   private dynRes = new DynamicResolution();
+  private perfLog: PerfLog;
+  private bufSize = new THREE.Vector2();
   private wasFull = false;
   private frameDt = 0;
   private ghosts: THREE.Mesh[] = [];
@@ -244,6 +247,7 @@ export class MissionView3D {
     this.comms = new Comms(this.hud.root, (l, u, v) => this.d.audio.transmit(u, v, l.enemy));
     this.comms.setVisible(d.settings.showRadio);
     this.telemetry = new Telemetry(this.hud.root, this.renderer);
+    this.perfLog = new PerfLog({ mission: this.session.def.id, low: this.d.settings.lowEffects }, this.renderer.getContext() as WebGL2RenderingContext);
     this.telemetry.setKeyLabel(codeLabel(d.settings.bindings.telemetry[0] ?? 'KeyV'));
     this.minimap = document.createElement('canvas');
     this.minimap.className = 'minimap3d';
@@ -490,6 +494,7 @@ export class MissionView3D {
     const low = this.d.settings.lowEffects;
     this.gtao.enabled = !low;
     this.smaa.enabled = !low;
+    this.perfLog.setLow(low);
     procUniforms.uProcOn.value = low ? 0 : 1;
     this.lampLights.setLow(low);
     const moonSize = low ? 1024 : 2048;
@@ -503,6 +508,7 @@ export class MissionView3D {
 
   dispose(): void {
     this.disposed = true;
+    void this.perfLog.flush();
     cancelAnimationFrame(this.raf);
     this.listeners.forEach((f) => f());
     this.d.audio.setEngine(0, false, false);
@@ -540,7 +546,8 @@ export class MissionView3D {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     const t0 = performance.now();
     this.telemetry.frameStart(now);
-    if (this.dynRes.update(now - this.last)) this.resize();
+    const frameMs = now - this.last;
+    if (this.dynRes.update(frameMs)) this.resize();
     this.telemetry.resScale = this.dynRes.scale;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.frameDt = dt;
@@ -626,9 +633,26 @@ export class MissionView3D {
     this.renderMinimap(cur, selfPos);
     const tEnd = performance.now();
     this.telemetry.frameEnd(tEnd, { ticks, simMs, renderMs: tHud - tRender, hudMs: tEnd - tHud, cpuMs: tEnd - t0 });
+    if (!s.paused) {
+      const buf = this.renderer.getDrawingBufferSize(this.bufSize);
+      const ri = this.renderer.info.render;
+      this.perfLog.frame({
+        frameMs,
+        cpuMs: tEnd - t0,
+        draws: ri.calls,
+        tris: ri.triangles,
+        bufW: buf.x,
+        bufH: buf.y,
+        dyn: this.dynRes.scale,
+        combat: now - this.lastCombat < 8000,
+        foes: cur.tanks.filter((x) => x.alive && x.team !== me?.team).length,
+      });
+    }
+    this.telemetry.recording = this.perfLog.recording;
 
     if (s.outcome && !this.ended) {
       this.ended = true;
+      void this.perfLog.flush();
       setTimeout(() => !this.disposed && this.d.onEnd(s), 2600);
     }
   }
