@@ -48,4 +48,21 @@ describe('dynamic resolution', () => {
     run(d, 16.7, 1);
     expect(d.scale).toBe(1);
   });
+
+  it('settles where frames are smooth, not where the average looks fine (M1 Pro playtest shape)', () => {
+    // measured: frame ≈ 8 ms + 5.4 ms per Mpx, 2.08 Mpx at full scale, with ±7 ms of frame-to-frame jitter
+    const d = new DynamicResolution();
+    let i = 0;
+    const frame = () => 8 + 5.4 * 2.08 * d.scale * d.scale + 7 * Math.sin(i++ * 2.39996);
+    for (let t = 0; t < 60_000; ) t += frame(), d.update(frame());
+    expect(d.scale).toBeLessThanOrEqual(0.8);
+    let slow = 0, n = 0;
+    for (let t = 0; t < 20_000; n++) {
+      const ms = frame();
+      d.update(ms);
+      if (ms > 20) slow++;
+      t += ms;
+    }
+    expect(slow / n).toBeLessThan(0.1);
+  });
 });

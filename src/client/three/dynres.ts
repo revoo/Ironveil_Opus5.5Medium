@@ -1,18 +1,23 @@
 // Dynamic resolution: trade a little sharpness for a steady frame rate.
 //
-// The browser caps frames at the display refresh, so a frame time that's on budget says nothing
-// about headroom. The controller therefore steps the render scale down quickly when frames run
-// long, and *probes* upwards after a calm spell; a probe that drops frames is undone and the next
-// one waits twice as long, so a machine that can't hold the higher scale stops trying.
+// Judged on *slow frames*, not the average: a 120 Hz display averaging 17 ms (58 fps) looks fine on
+// average but drops a frame every few. Each second the controller counts frames over SLOW_MS: too
+// many and it steps the scale down. The browser caps frames at the display refresh, so a fast frame
+// says nothing about headroom; after a calm spell it *probes* one step up, and a probe that brings
+// slow frames back is undone, with the next probe waiting twice as long.
 export class DynamicResolution {
   static readonly STEP = 0.1;
-  /** Frames longer than this (ms) are under ~52 fps: step down. */
-  static readonly SLOW_MS = 19;
-  /** Frames at or under this are holding 60 fps (or better). */
-  static readonly STEADY_MS = 17.6;
+  /** A frame longer than this (ms) missed 50 fps: on a 60 Hz display, a missed vsync. */
+  static readonly SLOW_MS = 20;
+  /** More than this share of slow frames in a second: step down. */
+  static readonly TOO_SLOW = 0.1;
+  /** Under this share counts as a calm second. */
+  static readonly CALM = 0.03;
 
   scale = 1;
-  private ema = 16.7;
+  private n = 0;
+  private slow = 0;
+  private span = 0;
   private calm = 0;
   private since = 0;
   private wait = 3;
@@ -23,19 +28,23 @@ export class DynamicResolution {
   /** Feed one frame's duration; returns true when the scale changed. */
   update(frameMs: number): boolean {
     if (frameMs > 250) return false; // tab switch or a one-off stall, not load
-    const dt = frameMs / 1000;
-    this.ema += (frameMs - this.ema) * 0.1;
-    this.since += dt;
-    if (this.ema > DynamicResolution.SLOW_MS) {
+    this.n++;
+    if (frameMs > DynamicResolution.SLOW_MS) this.slow++;
+    this.span += frameMs / 1000;
+    if (this.span < 1) return false;
+    const share = this.slow / this.n;
+    this.since += this.span;
+    this.n = this.slow = this.span = 0;
+    if (share > DynamicResolution.TOO_SLOW) {
       this.calm = 0;
-      if (this.since < 0.6 || this.scale <= this.min) return false;
+      if (this.scale <= this.min) return false;
       // a failed probe: back off and wait twice as long before the next one
       if (this.probing) this.wait = Math.min(this.wait * 2, 60);
       this.probing = false;
       return this.set(this.scale - DynamicResolution.STEP);
     }
-    if (this.ema <= DynamicResolution.STEADY_MS) {
-      this.calm += dt;
+    if (share < DynamicResolution.CALM) {
+      this.calm += 1;
       if (this.probing && this.since > 4) this.probing = false; // the probe held
       if (this.calm >= this.wait && this.scale < 1) {
         this.calm = 0;
@@ -51,7 +60,6 @@ export class DynamicResolution {
     if (next === this.scale) return false;
     this.scale = next;
     this.since = 0;
-    this.ema = 16.7; // judge the new scale on its own frames
     return true;
   }
 }
