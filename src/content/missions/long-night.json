@@ -1,0 +1,271 @@
+{
+  "id": "long-night",
+  "title": "The Long Night",
+  "summary": "The long playtest level: eleven stretches across the whole city, about 5-10 minutes. A convoy, a river with three crossings, an optional target, and a crew decision before the fortress.",
+  "level": "long-night",
+  "briefing": "Cross the city to the fortress at the far end and get out through its west yard. Old town, the boulevard, the factory, the river, the rail yard, the border checkpoint, then the fortress itself. Every stretch has a way around its guards, and the crew patches the tank at each checkpoint. A signal truck at the factory can call reinforcements to the fortress if they know you're coming. Taking it out is optional.",
+  "playerName": "Ironveil",
+  "alarmRadius": 520,
+  "units": [
+    { "id": "allot_watch", "name": "Allotment Watch", "marker": "allot_start", "ai": "simple", "posture": { "patrol": "allot_walk" }, "skill": 0.3 },
+
+    { "id": "ot_church", "name": "Church Corner", "marker": "ot_church", "ai": "simple", "skill": 0.4 },
+    { "id": "ot_plaza", "name": "Plaza Post", "marker": "ot_plaza", "ai": "simple", "skill": 0.4 },
+    { "id": "ot_lane", "name": "Lane Patrol", "marker": "ot_lane_start", "ai": "simple", "posture": { "patrol": "ot_lane" }, "skill": 0.4 },
+
+    { "id": "convoy_lead", "name": "Convoy Lead", "marker": "conv_a", "ai": "simple", "posture": { "patrol": "convoy_a" }, "skill": 0.45 },
+    { "id": "convoy_tail", "name": "Convoy Tail", "marker": "conv_b", "ai": "simple", "posture": { "patrol": "convoy_b" }, "skill": 0.45 },
+
+    { "id": "fac_gate", "name": "Factory Gate", "marker": "fac_gate", "ai": "simple", "skill": 0.45 },
+    { "id": "signal_truck", "name": "Signal Truck", "marker": "fac_truck", "ai": "simple", "skill": 0.3 },
+    { "id": "fac_yard", "name": "Yard Patrol", "marker": "fac_yard_start", "ai": "simple", "posture": { "patrol": "fac_yard" }, "skill": 0.45 },
+
+    { "id": "riv_north", "name": "North Bridge", "marker": "riv_north", "ai": "simple", "skill": 0.45 },
+    { "id": "riv_south", "name": "South Bridge", "marker": "riv_south", "ai": "simple", "skill": 0.45 },
+    { "id": "riv_bank", "name": "Bank Patrol", "marker": "riv_bank_start", "ai": "simple", "posture": { "patrol": "riv_bank" }, "skill": 0.45 },
+
+    { "id": "ry_tower", "name": "Signal Tower", "marker": "ry_tower", "ai": "simple", "skill": 0.5 },
+    { "id": "ry_west", "name": "Sidings West", "marker": "ry_west_start", "ai": "simple", "posture": { "patrol": "ry_west" }, "skill": 0.5 },
+    { "id": "ry_east", "name": "Sidings East", "marker": "ry_east_start", "ai": "simple", "posture": { "patrol": "ry_east" }, "skill": 0.5 },
+
+    { "id": "bc_gate_n", "name": "Border Gate N", "marker": "bc_gate_n", "ai": "simple", "skill": 0.5 },
+    { "id": "bc_gate_s", "name": "Border Gate S", "marker": "bc_gate_s", "ai": "simple", "skill": 0.5 },
+    { "id": "bc_ruins", "name": "Ruins Patrol", "marker": "bc_ruins_start", "ai": "simple", "posture": { "patrol": "bc_ruins" }, "skill": 0.5 },
+
+    { "id": "fo_gate_n", "name": "Fortress Gate N", "marker": "fo_gate_n", "ai": "simple", "skill": 0.55 },
+    { "id": "fo_gate_s", "name": "Fortress Gate S", "marker": "fo_gate_s", "ai": "simple", "skill": 0.55 },
+    { "id": "fo_culvert", "name": "Culvert Watch", "marker": "fo_culvert", "ai": "simple", "posture": { "patrol": "fo_culvert_walk" }, "skill": 0.5 },
+    { "id": "fo_keep", "name": "Keep Patrol", "marker": "fo_keep_start", "ai": "simple", "posture": { "patrol": "fo_keep" }, "skill": 0.55 },
+    { "id": "fo_inner", "name": "Inner Yard", "marker": "fo_inner", "ai": "simple", "skill": 0.55 }
+  ],
+  "objectives": [
+    { "id": "o_town", "text": "Get through the old town" },
+    { "id": "o_boulevard", "text": "Cross the boulevard", "state": "hidden" },
+    { "id": "o_factory", "text": "Get past the factory", "state": "hidden" },
+    { "id": "o_river", "text": "Cross the river", "state": "hidden" },
+    { "id": "o_rail", "text": "Cross the rail yard", "state": "hidden" },
+    { "id": "o_border", "text": "Get through the border checkpoint", "state": "hidden" },
+    { "id": "o_fortress", "text": "Reach the extraction yard inside the fortress", "state": "hidden" },
+    { "id": "opt_truck", "text": "Knock out the signal truck (optional)", "state": "hidden" },
+    { "id": "stay_hidden", "text": "Stay undetected (optional)" }
+  ],
+  "triggers": [
+    {
+      "id": "intro",
+      "when": { "after": 1 },
+      "do": [
+        { "radio": "Long night ahead. All the way across the city, fortress at the far end.", "from": "Commander" },
+        { "radio": "Allotments first. Somebody walks the road between the hedges.", "from": "Driver", "delay": 4.5 }
+      ]
+    },
+    {
+      "id": "allotments",
+      "when": { "enter": "allotments" },
+      "do": [{ "radio": "Hedges hide us if we keep our distance. Shift for silent running.", "from": "Gunner" }]
+    },
+    {
+      "id": "cp_oldtown",
+      "when": { "enter": "z_oldtown" },
+      "do": [
+        { "checkpoint": "cp_oldtown" },
+        { "repair": true },
+        { "radio": "Old town. Narrow streets, short sightlines. Whoever we meet, we meet up close.", "from": "Gunner" },
+        { "radio": "The church blocks the main street. Round the north or through the lanes south.", "from": "Driver", "delay": 4 }
+      ]
+    },
+    {
+      "id": "oldtown",
+      "when": { "enter": "oldtown" },
+      "do": [{ "radio": "Slow at the corners.", "from": "Commander" }]
+    },
+    {
+      "id": "cp_boulevard",
+      "when": { "enter": "z_boulevard" },
+      "do": [
+        { "objective": "o_town", "state": "complete" },
+        { "objective": "o_boulevard", "state": "active" },
+        { "checkpoint": "cp_boulevard" },
+        { "repair": true },
+        { "radio": "Boulevard. Two tanks running laps round the arcade.", "from": "Gunner" },
+        { "radio": "Let them pass, then cross behind. Verges have cover both sides.", "from": "Commander", "delay": 4 }
+      ]
+    },
+    {
+      "id": "boulevard_far",
+      "when": { "enter": "boulevard_far" },
+      "do": [{ "radio": "Road turns south past the gatehouse.", "from": "Driver" }]
+    },
+    {
+      "id": "cp_factory",
+      "when": { "enter": "z_factory" },
+      "do": [
+        { "objective": "o_boulevard", "state": "complete" },
+        { "objective": "o_factory", "state": "active" },
+        { "objective": "opt_truck", "state": "active" },
+        { "checkpoint": "cp_factory" },
+        { "repair": true },
+        { "radio": "Factory district. Gate on the road, one walking the yard.", "from": "Gunner" },
+        { "radio": "There's a signal truck parked in the yard. If they spot us later, that's who calls the fortress.", "from": "Loader", "delay": 4.5 },
+        { "radio": "Alleys run behind the halls, north and south. Your call.", "from": "Commander", "delay": 9 }
+      ]
+    },
+    {
+      "id": "factory_yard",
+      "when": { "enter": "factory_yard" },
+      "do": [{ "radio": "Truck's by the generator. Lightly armoured.", "from": "Gunner" }]
+    },
+    {
+      "id": "truck_down",
+      "when": { "destroyed": "signal_truck" },
+      "do": [
+        { "objective": "opt_truck", "state": "complete" },
+        { "radio": "Signal truck's down. Nobody's calling the fortress tonight.", "from": "Loader" }
+      ]
+    },
+    {
+      "id": "cp_river",
+      "when": { "enter": "z_river" },
+      "do": [
+        { "objective": "o_factory", "state": "complete" },
+        { "objective": "o_river", "state": "active" },
+        { "checkpoint": "cp_river" },
+        { "repair": true },
+        { "radio": "River. Bridges north and south, both watched.", "from": "Gunner" },
+        { "radio": "Or the ford in the middle. Deep mud, slow and loud, and the far bank has a patrol.", "from": "Driver", "delay": 4.5 }
+      ]
+    },
+    {
+      "id": "river",
+      "when": { "enter": "river" },
+      "do": [{ "radio": "Steady. Keep the revs down on the water.", "from": "Commander" }]
+    },
+    {
+      "id": "cp_park",
+      "when": { "enter": "z_park" },
+      "do": [
+        { "objective": "o_river", "state": "complete" },
+        { "objective": "o_rail", "state": "active" },
+        { "checkpoint": "cp_park" },
+        { "repair": true },
+        { "radio": "The park's clear. Breathe. Road turns south at the far side.", "from": "Commander" },
+        { "radio": "Halfway. Engine's holding.", "from": "Driver", "delay": 5 }
+      ]
+    },
+    {
+      "id": "cp_railyard",
+      "when": { "enter": "z_railyard" },
+      "do": [
+        { "checkpoint": "cp_railyard" },
+        { "repair": true },
+        { "radio": "Rail yard. Containers everywhere, a signal tower in the middle.", "from": "Gunner" },
+        { "radio": "Two patrols in the sidings. Overgrown tracks along both fences.", "from": "Driver", "delay": 4 }
+      ]
+    },
+    {
+      "id": "cp_border",
+      "when": { "enter": "z_border" },
+      "do": [
+        { "objective": "o_rail", "state": "complete" },
+        { "objective": "o_border", "state": "active" },
+        { "checkpoint": "cp_border" },
+        { "repair": true },
+        { "radio": "Border checkpoint. Two on the gate.", "from": "Gunner" },
+        { "radio": "Wall's breached south, through the rubble. Someone walks the ruins behind it.", "from": "Driver", "delay": 4 }
+      ]
+    },
+    {
+      "id": "past_border",
+      "when": { "enter": "past_border" },
+      "do": [{ "radio": "Through. Road turns south at the end.", "from": "Driver" }]
+    },
+    {
+      "id": "cp_approach",
+      "when": { "enter": "z_approach" },
+      "do": [
+        { "objective": "o_border", "state": "complete" },
+        { "objective": "o_fortress", "state": "active" },
+        { "checkpoint": "cp_approach" },
+        { "repair": true },
+        { "radio": "Fortress is west. Gate on the road, a culvert under the wall to the south.", "from": "Gunner" },
+        { "radio": "I've got one flare. I can pull some of them off, if you tell me where.", "from": "Loader", "delay": 4.5 }
+      ]
+    },
+    {
+      "id": "flare",
+      "when": { "enter": "approach_choice" },
+      "do": [
+        {
+          "choice": {
+            "from": "Loader",
+            "prompt": "Where does the flare go?",
+            "timeout": 20,
+            "default": 2,
+            "options": [
+              {
+                "text": "Over the culvert. Draw the gate crew south",
+                "do": [
+                  { "setFlag": "flare", "value": "culvert" },
+                  { "order": "fo_gate_n", "posture": { "patrol": "fo_flare_south" } },
+                  { "order": "fo_gate_s", "posture": { "patrol": "fo_flare_south" } },
+                  { "radio": "Flare's away. Gate crew's rolling south.", "from": "Loader" },
+                  { "radio": "Front door, then. Quick, before they come back.", "from": "Commander", "delay": 3 }
+                ]
+              },
+              {
+                "text": "Over the gate. Draw the culvert watch north",
+                "do": [
+                  { "setFlag": "flare", "value": "gate" },
+                  { "order": "fo_culvert", "posture": { "guard": "fo_flare_gate" } },
+                  { "radio": "Flare's away. Culvert watch is moving up.", "from": "Loader" },
+                  { "radio": "Mud and darkness it is. Driver, south.", "from": "Commander", "delay": 3 }
+                ]
+              },
+              {
+                "text": "Save it. We go as we are",
+                "do": [{ "setFlag": "flare", "value": "none" }, { "radio": "Keeping it. Might need it.", "from": "Loader" }]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "fortress",
+      "when": { "enter": "fortress" },
+      "do": [{ "radio": "Inside. Extraction's the west yard, past the keep.", "from": "Commander" }]
+    },
+    {
+      "id": "fortress_reinforced",
+      "when": { "all": [{ "alarm": true }, { "enter": "fortress" }, { "not": { "destroyed": "signal_truck" } }] },
+      "do": [
+        { "radio": "They knew we were coming. Reinforcements in the west yard!", "from": "Gunner" },
+        { "spawn": { "id": "fo_qrf", "name": "Fortress Reserve", "marker": "fo_qrf", "ai": "simple", "skill": 0.6 } }
+      ]
+    },
+    {
+      "id": "spotted",
+      "when": { "alarm": true },
+      "do": [
+        { "objective": "stay_hidden", "state": "failed" },
+        { "radio": "They've seen us! Finish it or break contact.", "from": "Commander" }
+      ]
+    },
+    {
+      "id": "extract_clean",
+      "when": { "all": [{ "enter": "extraction" }, { "not": { "alarm": true } }] },
+      "do": [
+        { "objective": "o_fortress", "state": "complete" },
+        { "objective": "stay_hidden", "state": "complete" },
+        { "end": "success", "text": "Across the whole city and out the back of their fortress. Nobody saw a thing." }
+      ]
+    },
+    {
+      "id": "extract_loud",
+      "when": { "all": [{ "enter": "extraction" }, { "alarm": true }] },
+      "do": [
+        { "objective": "o_fortress", "state": "complete" },
+        { "end": "success", "text": "We made it out. The whole city knows we were here." }
+      ]
+    }
+  ]
+}

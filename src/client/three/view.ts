@@ -305,7 +305,7 @@ export class MissionView3D {
     this.bloom.resolution.set((w * dpr) / 2, (h * dpr) / 2);
     (this.grade.uniforms.uRes as { value: THREE.Vector2 }).value.set(w * dpr, h * dpr);
     this.minimap.width = 196;
-    this.minimap.height = Math.round((196 * this.world.height) / this.world.width);
+    this.minimap.height = this.miniFollows() ? 147 : Math.round((196 * this.world.height) / this.world.width);
   }
 
   private drawMiniBase(): HTMLCanvasElement {
@@ -323,7 +323,32 @@ export class MissionView3D {
     ctx.strokeStyle = '#87c9e8';
     ctx.lineWidth = 2;
     for (const z of this.session.level.zonesTagged('extraction')) ctx.strokeRect((z.x / map.tile) * 4, (z.y / map.tile) * 4, (z.w / map.tile) * 4, (z.h / map.tile) * 4);
+    // Checkpoints are level data, not intel: small amber diamonds help find the way on big maps.
+    ctx.fillStyle = 'rgba(241,208,156,0.85)';
+    for (const m of this.session.level.markersTagged('checkpoint')) {
+      const x = (m.x / map.tile) * 4, y = (m.y / map.tile) * 4, r = this.miniFollows() ? 5 : 4;
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.fill();
+    }
     return c;
+  }
+
+  /** Big maps get a minimap window that follows the player instead of the whole map squeezed in. */
+  private miniFollows(): boolean {
+    return this.world.width > 4200 || this.world.height > 3000;
+  }
+
+  /** The world rectangle the minimap shows. */
+  private miniWindow(selfPos: Vec | null): { x0: number; y0: number; w: number; h: number } {
+    if (!this.miniFollows()) return { x0: 0, y0: 0, w: this.world.width, h: this.world.height };
+    const w = Math.min(this.world.width, 2600), h = Math.min(this.world.height, (w * 147) / 196);
+    const c = selfPos ?? { x: w / 2, y: h / 2 };
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    return { x0: clamp(c.x - w / 2, 0, this.world.width - w), y0: clamp(c.y - h / 2, 0, this.world.height - h), w, h };
   }
 
   // ------------------------------------------------------------------ camera
@@ -733,10 +758,15 @@ export class MissionView3D {
   private renderMinimap(cur: Observation, selfPos: Vec | null): void {
     const ctx = this.minimap.getContext('2d')!;
     const W = this.minimap.width, H = this.minimap.height;
-    const sx = W / this.world.width, sy = H / this.world.height;
+    const win = this.miniWindow(selfPos);
+    const sx = W / win.w, sy = H / win.h;
+    const k = 4 / this.session.map.tile; // miniBase pixels per world px
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
     ctx.globalAlpha = 0.9;
-    ctx.drawImage(this.miniBase, 0, 0, W, H);
+    ctx.drawImage(this.miniBase, win.x0 * k, win.y0 * k, win.w * k, win.h * k, 0, 0, W, H);
     ctx.globalAlpha = 1;
+    ctx.translate(-win.x0 * sx, -win.y0 * sy);
     for (const t of cur.tanks) {
       if (!t.alive) continue;
       const mine = t.id === this.session.playerId;
