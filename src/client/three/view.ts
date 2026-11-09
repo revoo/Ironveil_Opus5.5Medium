@@ -314,6 +314,30 @@ export class MissionView3D {
     this.renderer.setRenderTarget(this.composer.renderTarget1);
     this.renderer.compile(this.scene, this.camera);
     this.renderer.setRenderTarget(null);
+    // Compiling isn't everything: on a Mac the browser runs WebGL on Metal, which builds a pipeline
+    // the first time each material *draws* into each kind of target (scene, shadow maps, AO normals),
+    // and textures upload on first draw. Both stalled the first fight for ~120 ms. So draw one real
+    // frame through the whole composer with every pooled effect shown and nothing culled; it is
+    // overwritten by the first real frame before the browser ever shows it.
+    const culled: THREE.Object3D[] = [];
+    const empty: THREE.InstancedMesh[] = [];
+    this.scene.traverse((o) => {
+      if (o.frustumCulled) {
+        culled.push(o);
+        o.frustumCulled = false;
+      }
+      const im = o as THREE.InstancedMesh;
+      if (im.isInstancedMesh && im.count === 0) {
+        empty.push(im);
+        im.count = 1;
+      }
+    });
+    this.placeCamera();
+    this.moon.shadow.needsUpdate = true;
+    this.composer.render();
+    this.moon.shadow.needsUpdate = true;
+    for (const o of culled) o.frustumCulled = true;
+    for (const im of empty) im.count = 0;
     for (const o of hidden) o.visible = false;
   }
 

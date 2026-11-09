@@ -60,7 +60,8 @@ export class PerfLog {
   private win: number[] = [];
   private acc = { cpu: 0, draws: 0, tris: 0 };
   private samples: number[][] = [];
-  private stutters: { t: number; ms: number; combat: boolean }[] = [];
+  private stutters: { t: number; ms: number; cpu: number; combat: boolean }[] = [];
+  private prevCpu = 0;
   private sinceFlush = 0;
   private chunk = 0;
   private writing = false;
@@ -122,7 +123,9 @@ export class PerfLog {
     this.total.time += s;
     if (f.frameMs > 1000 / 50) this.total.slow++;
     this.total.worst = Math.max(this.total.worst, f.frameMs);
-    if (f.frameMs > STUTTER_MS && this.stutters.length < 200) this.stutters.push({ t: round(this.t), ms: Math.round(f.frameMs), combat: f.combat });
+    // cpu: the JS time of the frame before the gap (a long gap with little CPU is the GPU or driver)
+    if (f.frameMs > STUTTER_MS && this.stutters.length < 200) this.stutters.push({ t: round(this.t), ms: Math.round(f.frameMs), cpu: round(this.prevCpu), combat: f.combat });
+    this.prevCpu = f.cpuMs;
     const span = this.win.reduce((a, b) => a + b, 0);
     if (span >= SAMPLE_S * 1000) this.sample(span);
     this.sinceFlush += s;
