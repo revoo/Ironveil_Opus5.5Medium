@@ -32,6 +32,8 @@ export interface TankSpec {
   pos?: Vec;
   /** Initial hull/turret facing in radians (default: toward the map centre line). */
   facing?: number;
+  /** Full health (default TUNING.tank.maxHp). */
+  hp?: number;
 }
 
 /**
@@ -113,7 +115,7 @@ export class World {
   addTank(s: TankSpec): number {
     const id = this.tanks.length;
     const pos = s.pos ?? { x: this.map.width / 2, y: this.map.height / 2 };
-    const t = createTank(id, s.team, s.name, pos, s.isBot);
+    const t = createTank(id, s.team, s.name, pos, s.isBot, s.hp);
     if (s.facing !== undefined) t.hull = t.turret = s.facing;
     this.initialPos.set(id, { x: pos.x, y: pos.y });
     this.tanks.push(t);
@@ -232,7 +234,7 @@ export class World {
     t.pos = { ...pos };
     t.prevPos = { ...pos };
     t.vel = { x: 0, y: 0 };
-    t.hp = TUNING.tank.maxHp;
+    t.hp = t.maxHp;
     t.alive = true;
     t.respawnTick = -1;
     t.protectedUntil = this.tick + ticks(TUNING.match.spawnProtection);

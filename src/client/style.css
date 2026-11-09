@@ -196,6 +196,18 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-markers .combat::before { content: ''; position: absolute; width: 18px; height: 18px; background: var(--red); transform: rotate(45deg); box-shadow: 0 0 12px rgba(255,90,58,.7); }
 .h3-markers .combat span { color: #fff; font-size: 15px; text-shadow: none; }
 .h3-markers .boss span { color: var(--rust); font-size: 20px; }
+/* enemy health: a slim bar under the marker; the lost chunk lingers pale, then drains */
+.h3-markers .hp { position: absolute; left: 50%; top: 27px; width: 42px; height: 5px; margin-left: -21px; background: rgba(4,8,7,.7); box-shadow: 0 0 0 1px rgba(0,0,0,.55), 0 1px 6px rgba(0,0,0,.5); transition: opacity .3s; }
+.h3-markers .hp i { position: absolute; left: 0; top: 0; bottom: 0; }
+.h3-markers .hp .trail { background: rgba(255,236,200,.85); }
+.h3-markers .hp .fill { background: linear-gradient(180deg, #ffb08f, var(--rust)); }
+.h3-markers .hp.low .fill { background: linear-gradient(180deg, #ff7a5c, var(--red)); animation: h3beat .6s ease-in-out infinite; }
+/* hit marker on the cursor */
+.h3-cursor .hitx { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; opacity: 0; }
+.h3-cursor.hit .hitx { animation: h3hit .32s ease-out; }
+.h3-cursor.kill .hitx { stroke: var(--red); stroke-width: 3.2; animation: h3kill .7s ease-out; }
+@keyframes h3hit { 0% { opacity: 1; transform: scale(.7); } 30% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes h3kill { 0% { opacity: 1; transform: scale(.8); } 25% { opacity: 1; transform: scale(1.6); } 70% { opacity: 1; transform: scale(1.5); } 100% { opacity: 0; transform: scale(1.7); } }
 
 /* enemy barks: radio-intercept style callouts on a leader line above the speaker's marker */
 .h3-barks .bark { position: absolute; left: 0; top: 0; width: 0; height: 0; --tone: var(--dim); transition: opacity .2s linear; }

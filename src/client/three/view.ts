@@ -24,6 +24,7 @@ import { buildEnvironment, procUniforms } from './materials';
 import { buildTank, radialTexture, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
 import { CueArcs, Decals, Flashes, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
+import { Blasts } from './blast';
 import { Hud3D } from './hud';
 import { Telemetry } from './telemetry';
 import { codeLabel } from '../settings';
@@ -44,6 +45,12 @@ interface TankVis {
   wheel: number;
   last: Vec | null;
   dead: boolean;
+  /** Hit glow on the hull, 1 at impact, fading. */
+  flash: number;
+  /** Seconds since death (wreck animation), -1 while alive. */
+  deadT: number;
+  /** The turret blown off the wreck, flying until it lands. */
+  toss: { vx: number; vy: number; vz: number; sx: number; sz: number; landed: boolean } | null;
 }
 
 const GRADE = {
@@ -93,6 +100,7 @@ export class MissionView3D {
   private sparks: Sparks;
   private smoke: SmokeFx;
   private flashes: Flashes;
+  private blasts: Blasts;
   private headlights: Headlights;
   private arcs: CueArcs;
   private barrelMark: THREE.Mesh;
@@ -169,6 +177,19 @@ export class MissionView3D {
     this.sparks = new Sparks(scene);
     this.smoke = new SmokeFx(scene);
     this.flashes = new Flashes(scene);
+    this.blasts = new Blasts(scene, {
+      flash: (x, z, scale) => this.flashes.add(x, z, 'explosion', scale),
+      sparks: (x, y, z, n, speed) => this.sparks.burst(x, y, z, 0, 0, n, speed),
+      boom: (x, z, size, main) => {
+        const vol = Math.max(0.2, this.vol(x, z, 1500));
+        if (main) this.d.audio.explosion(this.pan(x), vol);
+        else this.d.audio.cookOff(size, this.pan(x), vol);
+      },
+      shake: (x, z, amount) => {
+        if (!this.d.settings.reducedMotion) this.shake = Math.max(this.shake, amount * Math.max(0.15, this.vol(x, z, 1000)));
+      },
+      crackle: (x, z) => this.d.audio.crackle(this.pan(x), this.vol(x, z, 700)),
+    });
     this.headlights = new Headlights(scene);
     this.arcs = new CueArcs(scene);
     for (let i = 0; i < 12; i++) {
@@ -522,6 +543,8 @@ export class MissionView3D {
     this.smoke.update(cur, dt, this.camera);
     this.rain.update(dt, this.camTarget.x, this.camTarget.z);
     this.flashes.update(dt);
+    this.blasts.update(dt, { x: this.camTarget.x, z: this.camTarget.z });
+    this.animateWrecks(dt);
     this.arcs.update(dt, selfPos);
     this.renderReticle(cur, selfPos);
     (this.grade.uniforms.uTime as { value: number }).value = t;
@@ -615,7 +638,7 @@ export class MissionView3D {
     if (!v) {
       const beam = coneMaterial(0xfff0cf, 0.06);
       this.beamMats.push(beam);
-      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, wheel: 0, last: null, dead: false };
+      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, wheel: 0, last: null, dead: false, flash: 0, deadT: -1, toss: null };
       this.tanks.set(t.id, v);
     }
     return v;
@@ -651,6 +674,14 @@ export class MissionView3D {
       // In brush, a tank is drawn sunk a little and its lights dimmed (it is hidden from the enemy).
       m.root.position.y = t.inBrush ? -3 : 0;
       this.headlights.request({ x, z: y, y: m.root.position.y, hull, intensity: t.quiet ? 60000 : 220000 });
+      // Hit glow: the armour flares orange-white for a moment.
+      if (v.flash > 0.002) {
+        v.flash *= Math.exp(-dt * 9);
+        for (const mat of m.materials) mat.emissive.setRGB(2.4 * v.flash, 1.1 * v.flash, 0.35 * v.flash);
+      }
+      // Damaged tanks trail smoke, and burn when nearly dead.
+      const health = t.hp / t.maxHp;
+      if (health < 0.7) this.blasts.smolder(x, y, hull, Math.min(1, (0.7 - health) / 0.55), dt);
       m.beam.visible = !t.quiet;
       if (t.id === this.session.playerId) self = { x, y };
     }
@@ -662,17 +693,62 @@ export class MissionView3D {
     const v = this.tanks.get(id);
     if (!v) return;
     v.dead = true;
+    v.deadT = 0;
     v.model.root.visible = true;
     v.model.root.position.set(x, 0, y);
-    v.model.turret.rotation.y += (Math.random() - 0.5) * 1.2;
-    v.model.turret.rotation.z = (Math.random() - 0.5) * 0.2;
     v.model.beam.visible = false;
     for (const mat of v.model.materials) {
       mat.color.multiplyScalar(0.22);
       mat.roughness = 1;
       mat.metalness = 0.1;
     }
+    // The turret is blown off: detach it into the world and throw it.
+    const tur = v.model.turret;
+    this.scene.attach(tur);
+    const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 70;
+    v.toss = { vx: Math.cos(a) * sp, vy: 260 + Math.random() * 90, vz: Math.sin(a) * sp, sx: (Math.random() - 0.5) * 9, sz: (Math.random() - 0.5) * 9, landed: false };
+    this.blasts.destroy(x, y);
     this.smoke.wreck(x, y);
+  }
+
+  /** Wreck animation: hull jolts up and settles at a tilt, metal cools, the turret lands. */
+  private animateWrecks(dt: number): void {
+    for (const v of this.tanks.values()) {
+      if (!v.dead || v.deadT < 0 || v.deadT > 40) continue;
+      v.deadT += dt;
+      const t = v.deadT, m = v.model;
+      const hop = t < 0.6 ? Math.sin((t / 0.6) * Math.PI) * 9 * (1 - t / 0.6) : 0;
+      m.root.position.y = hop - Math.min(1, t * 3) * 1.5;
+      m.root.rotation.z = Math.min(1, t * 4) * 0.06;
+      m.root.rotation.x = Math.min(1, t * 4) * -0.04;
+      const heat = Math.max(0, 1 - t / 9);
+      for (const mat of m.materials) mat.emissive.setRGB(1.4 * heat * heat, 0.32 * heat * heat * heat, 0.04 * heat * heat * heat);
+      const k = v.toss;
+      if (k && !k.landed) {
+        k.vy -= 620 * dt;
+        m.turret.position.x += k.vx * dt;
+        m.turret.position.y += k.vy * dt;
+        m.turret.position.z += k.vz * dt;
+        m.turret.rotation.x += k.sx * dt;
+        m.turret.rotation.z += k.sz * dt;
+        if (m.turret.position.y < 4 && k.vy < 0) {
+          m.turret.position.y = 4;
+          if (k.vy < -160) {
+            k.vy *= -0.25;
+            k.vx *= 0.4;
+            k.vz *= 0.4;
+            k.sx *= 0.3;
+            k.sz *= 0.3;
+            this.sparks.burst(m.turret.position.x, 4, m.turret.position.z, 0, 0, 25, 150);
+            this.d.audio.clank(this.pan(m.turret.position.x), this.vol(m.turret.position.x, m.turret.position.z, 900));
+          } else {
+            k.landed = true;
+            m.turret.rotation.x = Math.round(m.turret.rotation.x / Math.PI) * Math.PI + (Math.random() - 0.5) * 0.3;
+            m.turret.rotation.z = (Math.random() - 0.5) * 0.3;
+          }
+        }
+      }
+    }
   }
 
   private renderShells(prev: Observation, cur: Observation, a: number): void {
@@ -723,24 +799,37 @@ export class MissionView3D {
         break;
       }
       case 'impact':
+        if (e.kind === 'tank') this.blasts.hit(e.x, e.y, e.angle, e.charge);
         this.flashes.add(e.x, e.y, 'impact');
         this.sparks.burst(e.x, 10, e.y, Math.cos(e.angle), Math.sin(e.angle), 30 + Math.round(e.charge * 30), 260);
         if (e.kind !== 'tank') this.decals.addScorch(e.x, e.y, 0.5 + e.charge * 0.5);
         this.d.audio.impact(e.kind, e.charge, this.pan(e.x), this.vol(e.x, e.y));
         break;
-      case 'damage':
+      case 'damage': {
+        const v = this.tanks.get(e.target);
+        if (v) v.flash = 1;
+        const t = this.session.obs.tanks.find((x) => x.id === e.target);
         if (e.target === pid) {
           this.hurt = Math.min(1, this.hurt + 0.6 + e.charge * 0.4);
           if (!reduced) this.shake = Math.max(this.shake, 6 + e.charge * 10);
-        } else if (e.byUs) this.d.audio.hitConfirm();
+          this.d.audio.armorHit(e.charge, 0, 0.9, true);
+        } else {
+          if (t) this.d.audio.armorHit(e.charge, this.pan(t.x), Math.max(0.3, this.vol(t.x, t.y, 1100)), false);
+          if (e.byUs) {
+            this.d.audio.hitConfirm();
+            this.hud.hitMark(false);
+            if (!reduced) this.shake = Math.max(this.shake, 2 + e.charge * 3);
+          }
+          this.hud.noteHit(e.target);
+        }
+        break;
+      }
+      case 'kill':
+        if (e.byUs) this.hud.hitMark(true);
         break;
       case 'death':
-        this.flashes.add(e.x, e.y, 'explosion');
-        this.sparks.burst(e.x, 16, e.y, 0, 0, 90, 340);
-        this.decals.addScorch(e.x, e.y, 1.6);
+        this.decals.addScorch(e.x, e.y, 2.2);
         this.wreck(e.tank, e.x, e.y);
-        if (!reduced) this.shake = Math.max(this.shake, 14 * this.vol(e.x, e.y, 900));
-        this.d.audio.explosion(this.pan(e.x), Math.max(0.25, this.vol(e.x, e.y, 1400)));
         break;
       case 'smoke':
         this.d.audio.smoke(this.pan(e.x), this.vol(e.x, e.y));

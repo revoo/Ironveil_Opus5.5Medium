@@ -8,7 +8,9 @@
 //   bottom-left   radio as subtitles, then a slim hull gauge with smoke / silent / brush chips
 //   bottom-right  real-time decisions
 //   cursor        reload / charge / hold ring
-//   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss; barks as callouts above them
+//   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss; barks as callouts above them;
+//                 a health bar once damaged (bright after a hit, with the lost chunk draining away)
+//   cursor hits   a hit marker on every hit of ours, red and larger on a kill
 import type { MissionSession } from '../../game/mission/session';
 import type { Observation, TankView } from '../../sim/observation';
 import { WEAPON_TICKS } from '../../sim/weapon';
@@ -39,6 +41,8 @@ export class Hud3D {
   private hint = 0;
   private hullSegs: HTMLElement[] = [];
   private bubbles = new Map<number, HTMLElement>();
+  /** Per enemy: when we last saw it hit (performance.now ms) and the trailing "lost health" value. */
+  private hits = new Map<number, { at: number; trail: number }>();
 
   constructor(host: HTMLElement, private session: MissionSession) {
     this.root = document.createElement('div');
@@ -62,7 +66,8 @@ export class Hud3D {
       <section class="h3-barks"></section>
       <div class="h3-cursor"><svg viewBox="-24 -24 48 48">
         <circle class="trk" r="17"/><circle class="arc" r="17" transform="rotate(-90)"/>
-        <path class="tick" d="M0 -23v4M0 19v4M-23 0h4M19 0h4"/><circle class="dot" r="1.6"/></svg></div>
+        <path class="tick" d="M0 -23v4M0 19v4M-23 0h4M19 0h4"/><circle class="dot" r="1.6"/>
+        <path class="hitx" d="M-7 -7l-6 -6M7 -7l6 -6M-7 7l-6 6M7 7l6 6"/></svg></div>
       <div class="h3-lost">Tank lost</div>
       <div class="h3-hint"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</span><span><kbd>Mouse</kbd> aim</span><span><kbd>Space</kbd> hold to charge · release to fire</span><span><kbd>Q</kbd> smoke</span><span><kbd>Shift</kbd> silent</span><span><kbd>Wheel</kbd> zoom</span></div>`;
     host.appendChild(this.root);
@@ -73,6 +78,20 @@ export class Hud3D {
 
   dispose(): void {
     this.root.remove();
+  }
+
+  /** Flash the hit marker on the cursor; a kill makes it red and bigger. */
+  hitMark(kill: boolean): void {
+    const c = this.q<HTMLElement>('.h3-cursor');
+    c.classList.remove('hit', 'kill');
+    void c.offsetWidth; // restart the animation
+    c.classList.add(kill ? 'kill' : 'hit');
+  }
+
+  /** An enemy took damage: its health bar lights up. */
+  noteHit(id: number): void {
+    const h = this.hits.get(id);
+    this.hits.set(id, { at: performance.now(), trail: h?.trail ?? 1 });
   }
 
   update(cur: Observation, me: TankView | undefined, mouse: { x: number; y: number }, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }, dt: number): void {
@@ -195,9 +214,20 @@ export class Hud3D {
       if (boss) [cls, glyph] = ['boss', '◆'];
       else if (st === 'combat') [cls, glyph] = ['combat', '!'];
       else if (st === 'searching' || st === 'suspicious' || sus > 0.05) [cls, glyph] = ['sus', '?'];
-      if (!glyph) continue;
+      // health bar once damaged: bright for a few seconds after a hit, then a quiet reminder
+      const frac = Math.max(0, t.hp / t.maxHp);
+      let bar = '';
+      if (frac < 1) {
+        const h = this.hits.get(t.id) ?? { at: 0, trail: frac };
+        h.trail = Math.max(frac, h.trail - dt * 0.6);
+        this.hits.set(t.id, h);
+        const since = (performance.now() - h.at) / 1000;
+        const op = since < 2.5 ? 1 : Math.max(0.4, 1 - (since - 2.5) / 1.5);
+        bar = `<div class="hp${frac <= 0.34 ? ' low' : ''}" style="opacity:${op.toFixed(2)}"><i class="trail" style="width:${(h.trail * 100).toFixed(1)}%"></i><i class="fill" style="width:${(frac * 100).toFixed(1)}%"></i></div>`;
+      }
+      if (!glyph && !bar) continue;
       const arc = cls === 'sus' ? `<svg viewBox="-14 -14 28 28"><circle r="11" class="t"/><circle r="11" class="a" transform="rotate(-90)" style="stroke-dasharray:${(2 * Math.PI * 11).toFixed(1)};stroke-dashoffset:${(2 * Math.PI * 11 * (1 - sus)).toFixed(1)}"/></svg>` : '';
-      mk += `<div class="mk ${cls}" style="transform:translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)">${arc}<span>${glyph}</span></div>`;
+      mk += `<div class="mk ${cls}" style="transform:translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)">${glyph ? `${arc}<span>${glyph}</span>` : ''}${bar}</div>`;
     }
     if (mk !== this.markerKey) {
       this.markerKey = mk;

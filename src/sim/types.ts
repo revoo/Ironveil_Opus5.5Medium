@@ -54,6 +54,8 @@ export interface Tank {
   hull: number;
   turret: number;
   hp: number;
+  /** Full health for this tank (missions give garrison tanks less than the default). */
+  maxHp: number;
   alive: boolean;
   respawnTick: number;
   protectedUntil: number;

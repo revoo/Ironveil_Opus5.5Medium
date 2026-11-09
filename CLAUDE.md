@@ -52,6 +52,9 @@ npm run dev         # http://localhost:5173
   change per frame (lamp bulbs via shared material colour, tanks) stays separate.
 - Garrison barks (`BARK_LINES` in `ai/simple.ts`) are not radio: the 3D HUD draws them as callouts
   over visible speakers and `Radio.bark` plays them panned. Line choice must not draw from the AI RNG.
+- Explosions, debris, wreck fires and damage smoke live in `three/blast.ts`; all sprites, chunks and
+  lights are pooled up front so fights never create materials or change the light count (shader recompiles).
+  Garrison tanks have `GARRISON_HP` (60, `game/mission/session.ts`); tanks carry `maxHp`, so never assume 100.
 - `V` toggles the performance telemetry overlay (`three/telemetry.ts`); it sets `renderer.info.autoReset = false`.
 - Audio only starts after a user gesture (`audio.unlock()` on first pointer/key). `audio.tap()`
   exposes the final mix for recording previews.

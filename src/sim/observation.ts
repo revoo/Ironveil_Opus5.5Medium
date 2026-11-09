@@ -27,6 +27,7 @@ export interface TankView {
   hull: number;
   turret: number;
   hp: number;
+  maxHp: number;
   alive: boolean;
   phase: WeaponPhase;
   charge: number;
@@ -157,6 +158,7 @@ export class TeamObserver {
         hull: t.hull,
         turret: t.turret,
         hp: t.hp,
+        maxHp: t.maxHp,
         alive: t.alive,
         phase: t.weapon.phase,
         charge: chargeFraction(t.weapon),

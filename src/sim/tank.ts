@@ -2,7 +2,7 @@ import type { Vec } from './math';
 import { neutralInput, type Tank, type Team } from './types';
 import { TUNING } from './tuning';
 
-export function createTank(id: number, team: Team, name: string, pos: Vec, isBot: boolean): Tank {
+export function createTank(id: number, team: Team, name: string, pos: Vec, isBot: boolean, maxHp: number = TUNING.tank.maxHp): Tank {
   return {
     id,
     team,
@@ -13,7 +13,8 @@ export function createTank(id: number, team: Team, name: string, pos: Vec, isBot
     vel: { x: 0, y: 0 },
     hull: team === 0 ? 0 : Math.PI,
     turret: team === 0 ? 0 : Math.PI,
-    hp: TUNING.tank.maxHp,
+    hp: maxHp,
+    maxHp,
     alive: true,
     respawnTick: -1,
     protectedUntil: -1,

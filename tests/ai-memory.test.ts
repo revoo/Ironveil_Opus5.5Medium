@@ -5,7 +5,7 @@ import { Rng } from '../src/sim/rng';
 import type { Observation, TankView } from '../src/sim/observation';
 
 const view = (p: Partial<TankView>): TankView => ({
-  id: 0, team: 0, name: 'x', isBot: true, x: 0, y: 0, vx: 0, vy: 0, hull: 0, turret: 0, hp: 100, alive: true,
+  id: 0, team: 0, name: 'x', isBot: true, x: 0, y: 0, vx: 0, vy: 0, hull: 0, turret: 0, hp: 100, maxHp: 100, alive: true,
   phase: 'ready', charge: 0, hold: null, weaponTimer: 0, silent: false, quiet: false, protected: false,
   inBrush: false, revealed: false, smokeReadyTick: 0, respawnTick: -1, aimX: 0, aimY: 0, ...p,
 });

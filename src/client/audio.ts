@@ -278,10 +278,7 @@ export class AudioEngine {
     const o = this.out(pan, vol, 0.55);
     this.noise(0.035, o, 'highpass', 3500, 0.7, 2000, 0.0005, 1.1); // the crack
     this.noise(0.12 + charge * 0.25, o, 'bandpass', 2400 - charge * 1200, 0.8, 300, 0.001, 0.9);
-    const body = this.ctx.createGain();
-    body.gain.value = 0.55;
-    body.connect(this.drive);
-    this.drive.connect(o);
+    const body = this.driven(o, 0.55);
     this.tone('sine', 150 - charge * 70, 38, 0.25 + charge * 0.45, body, 1.1);
     this.tone('square', 90 - charge * 30, 30, 0.08 + charge * 0.1, o, 0.25);
     if (charge > 0.5) this.noise(0.9 * charge, o, 'lowpass', 900, 0.5, 120, 0.02, 0.35);
@@ -301,23 +298,82 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * A gain feeding a per-sound copy of the drive curve into `dest`. The shared WaveShaper used to be
+   * connected to every sound's output and never disconnected, so each new body played through all
+   * earlier outputs and grew louder over a mission.
+   */
+  private driven(dest: AudioNode, gain: number): GainNode {
+    const c = this.ctx!;
+    const ws = c.createWaveShaper();
+    ws.curve = this.drive.curve;
+    const g = c.createGain();
+    g.gain.value = gain;
+    g.connect(ws).connect(dest);
+    return g;
+  }
+
+  /** A tank destroyed: crack, fireball roar, sub-bass thump, then debris raining down. */
   explosion(pan: number, vol: number): void {
     if (!this.ctx || vol <= 0.01) return;
-    const o = this.out(pan, vol, 0.7);
-    this.noise(1.8, o, 'lowpass', 1800, 0.5, 80, 0.005, 1.2);
-    const boom = this.ctx.createGain();
-    boom.gain.value = 0.7;
-    boom.connect(this.drive);
-    this.tone('sine', 70, 25, 1.2, boom, 1.4, 0.01);
-    this.noise(0.25, o, 'highpass', 3000, 0.7, 1200, 0.001, 0.4);
-    // debris raining down
-    const c = this.ctx;
-    for (let i = 0; i < 14; i++) {
-      const t = 0.15 + Math.random() * 1.4;
-      setTimeout(() => this.ctx && this.noise(0.04 + Math.random() * 0.05, this.out(pan + (Math.random() - 0.5) * 0.4, vol * 0.35, 0.3), 'bandpass', 1500 + Math.random() * 3500, 2, undefined, 0.001, 0.6), t * 1000);
+    const o = this.out(pan, vol, 0.75);
+    this.noise(0.05, o, 'highpass', 2500, 0.7, 900, 0.0005, 1.3); // the crack
+    this.noise(2.4, o, 'lowpass', 2200, 0.5, 70, 0.006, 1.3); // the roar
+    this.noise(0.6, o, 'bandpass', 500, 0.8, 140, 0.01, 0.9); // the body
+    this.tone('sine', 62, 22, 1.6, this.driven(o, 0.8), 1.5, 0.008); // the thump
+    this.tone('sine', 41, 20, 2.2, o, 0.9, 0.02);
+    // debris raining down: metal ticks and thuds over a couple of seconds
+    for (let i = 0; i < 22; i++) {
+      const t = 0.2 + Math.random() * 2;
+      const big = Math.random() < 0.3;
+      setTimeout(() => {
+        if (!this.ctx) return;
+        const d = this.out(pan + (Math.random() - 0.5) * 0.5, vol * (big ? 0.4 : 0.3), 0.3);
+        if (big) this.tone('sine', 140 + Math.random() * 80, 60, 0.12, d, 0.7);
+        this.noise(0.03 + Math.random() * 0.06, d, 'bandpass', 1200 + Math.random() * 4000, 2.2, undefined, 0.001, 0.7);
+      }, t * 1000);
     }
-    void c;
-    this.score?.duck(0.55, 1.6);
+    this.score?.duck(0.65, 2);
+  }
+
+  /** Ammunition cooking off in a wreck: sharp, smaller blasts. `size` ~0.45..1.05. */
+  cookOff(size: number, pan: number, vol: number): void {
+    if (!this.ctx || vol <= 0.01) return;
+    const o = this.out(pan + (Math.random() - 0.5) * 0.2, vol * (0.55 + size * 0.45), 0.7);
+    this.noise(0.03, o, 'highpass', 3000, 0.7, 1200, 0.0005, 1.1);
+    this.noise(0.5 + size * 0.9, o, 'lowpass', 1600 + size * 800, 0.6, 90, 0.004, 1.1);
+    this.tone('sine', 95 - size * 30, 28, 0.4 + size * 0.7, this.driven(o, 0.6), 1.2, 0.006);
+    for (let i = 0; i < 5; i++) setTimeout(() => this.ctx && this.noise(0.02, this.out(pan, vol * 0.25, 0.2), 'bandpass', 2000 + Math.random() * 3000, 3, undefined, 0.001, 0.8), (0.05 + Math.random() * 0.4) * 1000);
+    this.score?.duck(0.3 + size * 0.2, 0.8);
+  }
+
+  /** A shell striking armour: an inharmonic metal clang, a thump, a rattle of spall. */
+  armorHit(charge: number, pan: number, vol: number, onUs: boolean): void {
+    if (!this.ctx || vol <= 0.01 || !this.throttle(onUs ? 'armorUs' : 'armor', 40)) return;
+    const o = this.out(pan, vol * (onUs ? 1 : 0.85), 0.35);
+    const base = onUs ? 330 : 470 + Math.random() * 60;
+    for (const [ratio, g, d] of [[1, 0.5, 0.5], [2.76, 0.35, 0.35], [5.4, 0.22, 0.22], [8.93, 0.12, 0.14]] as const) this.tone('sine', base * ratio, base * ratio * 0.97, d * (0.8 + charge * 0.5), o, g);
+    this.noise(0.08, o, 'bandpass', 3200, 1.5, 1500, 0.0005, 0.9);
+    this.tone('sine', 120 + charge * 40, 45, 0.25 + charge * 0.2, this.driven(o, 0.5), 1, 0.002);
+    for (let i = 0; i < 3 + Math.round(charge * 4); i++) setTimeout(() => this.ctx && this.noise(0.025, this.out(pan + (Math.random() - 0.5) * 0.3, vol * 0.2, 0.15), 'bandpass', 2500 + Math.random() * 3500, 3, undefined, 0.001, 0.7), (0.06 + Math.random() * 0.5) * 1000);
+  }
+
+  /** A burning wreck crackles and pops. */
+  crackle(pan: number, vol: number): void {
+    if (!this.ctx || vol <= 0.02) return;
+    const o = this.out(pan, vol * 0.45, 0.2);
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) setTimeout(() => this.ctx && this.noise(0.015 + Math.random() * 0.03, o, 'bandpass', 1500 + Math.random() * 3000, 1.5, undefined, 0.001, 0.8), i * (30 + Math.random() * 90));
+    if (Math.random() < 0.25) this.noise(0.4, o, 'lowpass', 400, 0.5, 150, 0.05, 0.4); // a whoomph of flame
+  }
+
+  /** Heavy metal landing (a turret thrown off a wreck). */
+  clank(pan: number, vol: number): void {
+    if (!this.ctx || vol <= 0.01) return;
+    const o = this.out(pan, vol * 0.8, 0.4);
+    this.tone('sine', 190, 120, 0.4, o, 0.7);
+    this.tone('triangle', 410, 380, 0.3, o, 0.25);
+    this.noise(0.12, o, 'bandpass', 900, 1.2, 400, 0.001, 0.8);
   }
 
   smoke(pan: number, vol: number): void {

@@ -59,6 +59,8 @@ export interface MissionNotice {
 
 const MAX_STEPS_PER_ADVANCE = 8;
 const HZ = TUNING.tickHz;
+/** Garrison tanks are lighter than the player's: two or three hits, not five. */
+export const GARRISON_HP = 60;
 
 export class MissionSession {
   readonly playerId = 0;
@@ -212,7 +214,7 @@ export class MissionSession {
 
   private addUnit(u: UnitDef, rebuild = true): void {
     const m = this.level.marker(u.marker);
-    const id = this.world.addTank({ name: u.name, team: 1, isBot: true, pos: { x: m.x, y: m.y }, ...(m.facing !== undefined ? { facing: degToRad(m.facing) } : {}) });
+    const id = this.world.addTank({ name: u.name, team: 1, isBot: true, pos: { x: m.x, y: m.y }, hp: u.hp ?? (u.ai === 'simple' ? GARRISON_HP : TUNING.tank.maxHp), ...(m.facing !== undefined ? { facing: degToRad(m.facing) } : {}) });
     this.unitTank.set(u.id, id);
     this.tankUnit.set(id, u.id);
     this.unitDefs.set(u.id, u);
@@ -282,7 +284,10 @@ export class MissionSession {
       } else if ('alarm' in a) {
         const p = this.world.tank(this.playerId).pos;
         this.simple.raiseAlarm(a.at ? this.placeOf(a.at) : { x: p.x, y: p.y }, tick, -1, a.radius ?? Infinity);
-      } else if ('repair' in a) this.world.tank(this.playerId).hp = TUNING.tank.maxHp;
+      } else if ('repair' in a) {
+        const me = this.world.tank(this.playerId);
+        me.hp = me.maxHp;
+      }
       else if ('checkpoint' in a) this.pendingCheckpoint = a.checkpoint;
       else if ('choice' in a) this.openChoice(a.choice);
       else if ('end' in a) this.finish({ result: a.end, reason: 'scripted', ...(a.text ? { text: a.text } : {}) });

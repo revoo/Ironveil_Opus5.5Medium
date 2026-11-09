@@ -53,6 +53,9 @@ npm run build && npm run preview     # production build on http://localhost:4173
   team's filtered `Observation`, so hidden enemies are never rendered.
 - **3D mission renderer**: procedural PBR materials, Berlin-wall slabs and buildings generated from
   the level's wall tiles, shadowed streetlamps, rain, mist, ambient occlusion, bloom and a film grade.
+- **Combat feedback**: armour hits glow and throw spall, damaged tanks smoke and then burn, enemy
+  health bars and a cursor hit marker. A kill is a fireball with a shockwave and debris, the turret
+  blown off, two to five ammunition cook-offs, and a wreck that burns for half a minute.
 - **Audio**, all synthesised: an adaptive score that follows detection, radio treatment for crew
   lines, night-city ambience, urban reverb.
 

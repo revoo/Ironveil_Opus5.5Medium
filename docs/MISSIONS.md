@@ -39,6 +39,7 @@ unit, objective and trigger id it mentions must exist.
 | `ai` | `simple` for ordinary garrison units, `boss` for the full tactical squad AI (see [AI.md](AI.md)). |
 | `posture` | What a calm unit does: `{ "patrol": pathId }`, `{ "guard": markerId }` (stand there and scan around the marker's facing) or `{ "hold": markerId }`. Default: guard its own spawn marker. |
 | `skill` | 0–1, simple AI only. Affects aim error, target leading and how fast suspicion builds. |
+| `hp` | Full health. Default 60 for `simple` units (two or three hits), 100 for bosses and the player. |
 | `persona` | Boss only: a tactical persona id (`brawler`, `marksman`, `stalker`, `flanker`, `anchor`, `scrapper`). |
 
 ### How the simple AI notices you

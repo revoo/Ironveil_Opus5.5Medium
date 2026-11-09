@@ -22,6 +22,8 @@ export interface UnitDef {
   skill?: number;
   /** Tactical AI persona id, boss only. */
   persona?: string;
+  /** Full health. Default: 60 for garrison (`simple`) units, 100 for bosses, the same as the player. */
+  hp?: number;
 }
 
 export interface ObjectiveDef {

@@ -181,7 +181,7 @@ export class Sparks {
   private life: Float32Array;
   private geo = new THREE.BufferGeometry();
   private next = 0;
-  constructor(scene: THREE.Scene, readonly max = 600) {
+  constructor(scene: THREE.Scene, readonly max = 1600) {
     this.pos = new Float32Array(max * 3);
     this.col = new Float32Array(max * 3);
     this.vel = new Float32Array(max * 3);
@@ -373,7 +373,7 @@ export class Flashes {
   private lights: THREE.PointLight[] = [];
   private list: Flash[] = [];
   constructor(scene: THREE.Scene) {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture, color: new THREE.Color(4, 2.2, 0.8), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       s.visible = false;
       scene.add(s);
@@ -385,15 +385,15 @@ export class Flashes {
       this.lights.push(l);
     }
   }
-  add(x: number, z: number, kind: 'muzzle' | 'impact' | 'explosion'): void {
+  add(x: number, z: number, kind: 'muzzle' | 'impact' | 'explosion', scale = 1): void {
     const f: Flash =
       kind === 'muzzle'
         ? { x, z, y: 22, t: 0, dur: 0.12, size: 46, light: 300000 }
         : kind === 'impact'
           ? { x, z, y: 14, t: 0, dur: 0.35, size: 90, light: 520000 }
-          : { x, z, y: 20, t: 0, dur: 0.9, size: 220, light: 1600000 };
+          : { x, z, y: 24, t: 0, dur: 0.35 + 0.3 * scale, size: 150 * scale, light: 450000 * scale };
     this.list.push(f);
-    if (this.list.length > 8) this.list.shift();
+    if (this.list.length > 12) this.list.shift();
   }
   update(dt: number): void {
     for (const f of this.list) f.t += dt;

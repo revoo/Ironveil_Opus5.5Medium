@@ -198,7 +198,7 @@ export class Bot {
       tick,
       self,
       pos,
-      hp: self.hp / TUNING.tank.maxHp,
+      hp: self.hp / self.maxHp,
       target,
       dist,
       hasShot,
