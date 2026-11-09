@@ -18,7 +18,7 @@ export function createTank(id: number, team: Team, name: string, pos: Vec, isBot
     alive: true,
     respawnTick: -1,
     protectedUntil: -1,
-    weapon: { phase: 'ready', timer: 0, chargeTicks: 0 },
+    weapon: { phase: 'ready', timer: 0, chargeTicks: 0, reloadTicks: 0 },
     smokeReadyTick: 0,
     silent: false,
     quiet: false,

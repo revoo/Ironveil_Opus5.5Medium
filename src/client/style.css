@@ -132,6 +132,22 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-status .cap { font-size: 11px; letter-spacing: .32em; text-transform: uppercase; color: var(--dim); }
 .h3-status .segs { display: flex; gap: 3px; }
 .h3-status .segs b { width: 14px; height: 9px; transform: skewX(-22deg); background: rgba(237,244,223,.1); box-shadow: 0 0 0 1px rgba(0,0,0,.35); transition: background .2s; }
+.h3-status .gun { display: flex; align-items: center; gap: 10px; }
+.h3-status .gun .bar { position: relative; width: 132px; height: 9px; transform: skewX(-22deg); background: rgba(237,244,223,.1); box-shadow: 0 0 0 1px rgba(0,0,0,.35); overflow: hidden; }
+.h3-status .gun .fill { position: absolute; inset: 0; transform-origin: left; transform: scaleX(0); background: var(--dim); }
+.h3-status .gun .burst { position: absolute; top: -2px; bottom: -2px; width: 2px; background: rgba(237,244,223,.55); }
+.h3-status .gun[data-m="charging"] .fill { background: linear-gradient(90deg, #a4793f, var(--amber)); }
+.h3-status .gun.burst[data-m="charging"] .fill { background: linear-gradient(90deg, #a4793f, var(--amber) 45%, #ffd7a0); box-shadow: 0 0 12px rgba(255,190,110,.7); }
+.h3-status .gun[data-m="hold"] .fill, .h3-status .gun[data-m="venting"] .fill { background: linear-gradient(90deg, var(--amber), #fff3dc); box-shadow: 0 0 16px rgba(255,210,140,.9); animation: h3beat .5s ease-in-out infinite; }
+.h3-status .gun[data-m="venting"] .fill { background: linear-gradient(90deg, var(--rust), var(--red)); }
+.h3-status .gun[data-m="vented"] .fill { background: var(--rust); }
+.h3-status .gun .dmg { min-width: 52px; font-variant-numeric: tabular-nums; color: var(--dim); }
+.h3-status .gun .dmg b { font-size: 18px; color: var(--ink); margin-right: 3px; }
+.h3-status .gun.burst .dmg b, .h3-status .gun[data-m="hold"] .dmg b { color: var(--amber); }
+.h3-status .gun .dmg small { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; }
+.h3-status .gun .st { min-width: 150px; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+.h3-status .gun[data-m="hold"] .st { color: var(--amber); }
+.h3-status .gun[data-m="venting"] .st, .h3-status .gun[data-m="vented"] .st { color: var(--rust); }
 .h3-status .segs b.on { background: var(--steel); }
 .h3-status.low .segs b.on { background: var(--rust); animation: h3pulse 1s ease-in-out infinite; }
 .h3-status .num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 34px; }
@@ -178,6 +194,13 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-cursor .arc { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; transition: stroke .15s, stroke-width .15s; }
 .h3-cursor .tick { stroke: rgba(237,244,223,.75); stroke-width: 1.5; }
 .h3-cursor .dot { fill: var(--ink); }
+/* charge on the cursor: damage readout under the ring, LETHAL when it kills what you aim at */
+.h3-cursor .cd { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: var(--amber); text-shadow: var(--sh); font-variant-numeric: tabular-nums; }
+.h3-cursor.lethal .cd { color: var(--red); font-size: 13px; }
+.h3-cursor.lethal .arc { stroke: var(--red) !important; }
+.h3-cursor .full { fill: none; stroke: var(--amber); stroke-width: 1.5; opacity: 0; }
+.h3-cursor[data-m="hold"] .full { opacity: .8; animation: h3fullring .5s ease-out infinite; }
+@keyframes h3fullring { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.25); opacity: 0; } }
 .h3-cursor[data-m="reload"] .arc { stroke: var(--dim); }
 .h3-cursor[data-m="charging"] .arc { stroke: var(--amber); stroke-width: 3; }
 .h3-cursor[data-m="hold"] .arc { stroke: var(--amber); stroke-width: 3.5; }
@@ -232,5 +255,5 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-hint span { display: inline-flex; align-items: center; gap: 5px; }
 .h3-hint kbd { min-width: 18px; height: 18px; font-size: 11px; }
 .minimap3d { position: absolute; top: 22px; right: 22px; pointer-events: none; border: 1px solid rgba(237,244,223,.16); border-radius: 3px; opacity: .9; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-@media (max-width: 1100px) { .h3-hint { display: none; } .h3-radio { bottom: 70px; } }
+@media (max-width: 1100px) { .h3-hint { display: none; } .h3-radio { bottom: 70px; } .h3-status .gun .st { display: none; } }
 @media (prefers-reduced-motion: reduce) { .h3 * { animation: none !important; transition: none !important; } }

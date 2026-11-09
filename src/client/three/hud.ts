@@ -7,13 +7,16 @@
 //   top-right     minimap (owned by the view)
 //   bottom-left   radio as subtitles, then a slim hull gauge with smoke / silent / brush chips
 //   bottom-right  real-time decisions
-//   cursor        reload / charge / hold ring
+//   cursor        reload / charge / hold ring; while charging the damage it will do, and LETHAL
+//                 when that kills the enemy under the cursor
+//   bottom-left   (beside the hull) the cannon gauge: charge, burst threshold, damage, state
 //   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss; barks as callouts above them;
 //                 a health bar once damaged (bright after a hit, with the lost chunk draining away)
 //   cursor hits   a hit marker on every hit of ours, red and larger on a kill
 import type { MissionSession } from '../../game/mission/session';
 import type { Observation, TankView } from '../../sim/observation';
-import { WEAPON_TICKS } from '../../sim/weapon';
+import { WEAPON_TICKS, shotStats } from '../../sim/weapon';
+import { TUNING } from '../../sim/tuning';
 
 const ICON = {
   smoke: '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.2 9.2 4.4 4.4 0 0 0 7 18z"/></svg>',
@@ -55,6 +58,7 @@ export class Hud3D {
       <section class="h3-radio"></section>
       <section class="h3-status">
         <div class="hull"><span class="cap">Hull</span><div class="segs">${'<b></b>'.repeat(10)}</div><span class="num">100</span></div>
+        <div class="gun"><span class="cap">Cannon</span><div class="bar"><i class="fill"></i><i class="burst" style="left:${TUNING.cannon.splashFrom * 100}%"></i></div><span class="dmg"><b>22</b><small>dmg</small></span><span class="st">Ready</span></div>
         <div class="chips">
           <span class="chip smoke">${ICON.smoke}<em>Q</em></span>
           <span class="chip silent">${ICON.silent}<em>Silent</em></span>
@@ -67,7 +71,7 @@ export class Hud3D {
       <div class="h3-cursor"><svg viewBox="-24 -24 48 48">
         <circle class="trk" r="17"/><circle class="arc" r="17" transform="rotate(-90)"/>
         <path class="tick" d="M0 -23v4M0 19v4M-23 0h4M19 0h4"/><circle class="dot" r="1.6"/>
-        <path class="hitx" d="M-7 -7l-6 -6M7 -7l6 -6M-7 7l-6 6M7 7l6 6"/></svg></div>
+        <path class="hitx" d="M-7 -7l-6 -6M7 -7l6 -6M-7 7l-6 6M7 7l6 6"/><circle class="full" r="22"/></svg><div class="cd"></div></div>
       <div class="h3-lost">Tank lost</div>
       <div class="h3-hint"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</span><span><kbd>Mouse</kbd> aim</span><span><kbd>Space</kbd> hold to charge · release to fire</span><span><kbd>Q</kbd> smoke</span><span><kbd>Shift</kbd> silent</span><span><kbd>Wheel</kbd> zoom</span></div>`;
     host.appendChild(this.root);
@@ -94,7 +98,7 @@ export class Hud3D {
     this.hits.set(id, { at: performance.now(), trail: h?.trail ?? 1 });
   }
 
-  update(cur: Observation, me: TankView | undefined, mouse: { x: number; y: number }, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }, dt: number): void {
+  update(cur: Observation, me: TankView | undefined, mouse: { x: number; y: number }, aim: { x: number; y: number }, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }, dt: number): void {
     const s = this.session;
     const tick = cur.tick;
     this.root.classList.toggle('ended', !!s.outcome);
@@ -172,7 +176,7 @@ export class Hud3D {
         frac = me.charge;
         mode = me.hold !== null ? (me.hold < WEAPON_TICKS.hold * 0.35 ? 'venting' : 'hold') : 'charging';
       } else if (me.phase === 'reloading') {
-        frac = 1 - me.weaponTimer / WEAPON_TICKS.reload;
+        frac = 1 - me.weaponTimer / Math.max(1, me.reloadTicks);
         mode = 'reload';
       } else if (me.phase === 'vent' || me.phase === 'cancel') {
         frac = 1 - me.weaponTimer / (me.phase === 'vent' ? WEAPON_TICKS.vent : WEAPON_TICKS.cancel);
@@ -180,6 +184,39 @@ export class Hud3D {
       }
       cur$.dataset.m = mode;
       (cur$.querySelector('.arc') as SVGCircleElement).style.strokeDashoffset = String(RING * (1 - Math.max(0, Math.min(1, frac))));
+
+      // ---- cannon gauge and the shot's promise: damage, burst, and whether it kills what you aim at
+      const charging = me.phase === 'charging';
+      const c = charging ? me.charge : 0;
+      const dmg = shotStats(c).damage;
+      const burst = c >= TUNING.cannon.splashFrom;
+      const gun = this.q<HTMLElement>('.h3-status .gun');
+      gun.dataset.m = mode;
+      gun.classList.toggle('burst', burst);
+      const fill = this.q<HTMLElement>('.gun .fill');
+      fill.style.transform = `scaleX(${(charging ? c : me.phase === 'ready' ? 0 : Math.max(0, Math.min(1, frac))).toFixed(3)})`;
+      this.q('.gun .dmg b').textContent = String(dmg);
+      const holdLeft = me.hold !== null ? me.hold / 30 : 0;
+      this.q('.gun .st').textContent =
+        mode === 'ready' ? 'Ready'
+        : mode === 'charging' ? (burst ? 'Charging · burst' : 'Charging')
+        : mode === 'hold' || mode === 'venting' ? `Full · release ${holdLeft.toFixed(1)}s`
+        : mode === 'vented' ? 'Vented'
+        : `Reloading ${(me.weaponTimer / 30).toFixed(1)}s`;
+      // the enemy under the cursor, if any
+      let target: TankView | undefined;
+      let best = 46;
+      for (const t of cur.tanks) {
+        if (t.team === cur.team || !t.alive) continue;
+        const d = Math.hypot(t.x - aim.x, t.y - aim.y);
+        if (d < best) [best, target] = [d, t];
+      }
+      const lethal = !!target && (charging || me.phase === 'ready') && dmg >= target.hp;
+      cur$.classList.toggle('lethal', lethal);
+      cur$.classList.toggle('charging', charging && c > 0.05);
+      const cd = this.q<HTMLElement>('.h3-cursor .cd');
+      const label = lethal ? `LETHAL · ${dmg}` : charging && c > 0.05 ? `${dmg}${burst ? ' · burst' : ''}` : '';
+      if (cd.textContent !== label) cd.textContent = label;
     }
 
     // ---- decisions

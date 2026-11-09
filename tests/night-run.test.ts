@@ -11,7 +11,7 @@ function drive(s: MissionSession, goal: Vec, seconds: number, each?: () => void)
   let idx = 0;
   for (let i = 0; i < seconds * 30 && !s.outcome; i++) {
     const me = s.world.tank(0);
-    me.hp = 100;
+    me.hp = 1000; // invulnerable: several hits can land in one tick
     if (i % 30 === 0) {
       path = nav.findPath(me.pos, goal) ?? [];
       idx = 0;
@@ -43,6 +43,7 @@ describe('demo: Night Run', () => {
       });
     }
     expect(seen).toEqual(order);
+    expect(s.outcome, JSON.stringify(s.outcome)).toBeTruthy();
     expect(s.outcome?.result).toBe('success');
     expect(s.runner.state.objectives.o_depot).toBe('complete');
   });

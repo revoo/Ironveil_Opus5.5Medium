@@ -71,6 +71,12 @@ a softer key-up when calm, plus the breech clank on "Reloading!". Lines live in
 | `summary` | One line under the title on the menu's mission card. |
 | `alarmRadius` | How far (px) a garrison alarm reaches. Default 900. On a large map, keep separate stretches further apart than this so a fight in one doesn't empty the next (`night-run` uses 560). |
 
+Your cannon makes every fight a choice (`TUNING.cannon`): a tap deals 22 and reloads in 0.65 s; damage
+rises with charge to the power 1.6, so a full 1.5 s charge deals 80 (one garrison tank), flies at
+950 px/s, and bursts on impact for up to 26 splash damage within 95 px (walls block it), at the cost
+of slowing down, being heard and a 1.7 s reload. A garrison tank that survives a hit of 45+ barks
+"I've sustained major damage!".
+
 Garrison units fire at most once every `shotGap` seconds (1.5 s at skill 0.5, slower for low
 skill, faster for high), so two tanks in the open give you a few seconds to react, not one.
 

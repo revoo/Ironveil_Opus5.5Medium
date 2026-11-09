@@ -7,7 +7,7 @@ import { raycastWalls, type GameMap } from './map';
 import { Rng } from './rng';
 import { createTank } from './tank';
 import { stepMovement } from './movement';
-import { chargeSpeedFactor, interruptCharge, resetWeapon, shotStats, stepWeapon } from './weapon';
+import { chargeSpeedFactor, interruptCharge, resetWeapon, shotStats, splashStats, stepWeapon } from './weapon';
 import { TrackStore, updateTankTracks } from './tracks';
 import { sightClear } from './vision';
 import { terrainProfile } from './movement';
@@ -325,12 +325,14 @@ export class World {
     if (wallT !== Infinity && wallT <= tankT) {
       const pos = { x: t.pos.x + (muzzle.x - t.pos.x) * wallT, y: t.pos.y + (muzzle.y - t.pos.y) * wallT };
       this.impact(pos, 'wall', charge, t.turret, pid);
+      this.splash(pos, t.turret, charge, t.id, t.team, -1);
       return;
     }
     if (hitTank) {
       const pos = { x: t.pos.x + (muzzle.x - t.pos.x) * tankT, y: t.pos.y + (muzzle.y - t.pos.y) * tankT };
       this.impact(pos, 'tank', charge, t.turret, pid, hitTank.id);
       this.pendingHits.push({ target: hitTank.id, attacker: t.id, team: t.team, damage, charge, dir: t.turret });
+      this.splash(pos, t.turret, charge, t.id, t.team, hitTank.id);
       return;
     }
     this.projectiles.push({
@@ -373,13 +375,16 @@ export class World {
       }
       const angle = Math.atan2(uy, ux);
       if (tWall !== Infinity && tWall <= tTank) {
-        this.impact({ x: p.pos.x + ux * seg * tWall, y: p.pos.y + uy * seg * tWall }, 'wall', p.charge, angle, p.id);
+        const pos = { x: p.pos.x + ux * seg * tWall, y: p.pos.y + uy * seg * tWall };
+        this.impact(pos, 'wall', p.charge, angle, p.id);
+        this.splash(pos, angle, p.charge, p.owner, p.team, -1);
         continue;
       }
       if (target) {
         const pos = { x: p.pos.x + ux * seg * tTank, y: p.pos.y + uy * seg * tTank };
         this.impact(pos, 'tank', p.charge, angle, p.id, target.id);
         this.pendingHits.push({ target: target.id, attacker: p.owner, team: p.team, damage: p.damage, charge: p.charge, dir: angle });
+        this.splash(pos, angle, p.charge, p.owner, p.team, target.id);
         continue;
       }
       p.pos = end;
@@ -391,6 +396,25 @@ export class World {
       keep.push(p);
     }
     this.projectiles = keep;
+  }
+
+  /**
+   * A charged shell bursts: enemies near the impact (not the direct target, not behind a wall) take
+   * splash damage that falls off with distance from the hull edge.
+   */
+  private splash(pos: Vec, angle: number, charge: number, attacker: number, team: Team, direct: number): void {
+    const { radius, damage } = splashStats(charge);
+    if (radius <= 0) return;
+    // Measure from just in front of the impact, so the wall that was hit doesn't block its own blast.
+    const o = { x: pos.x - Math.cos(angle) * 4, y: pos.y - Math.sin(angle) * 4 };
+    for (const e of this.tanks) {
+      if (!e.alive || e.team === team || e.id === direct) continue;
+      const d = Math.max(0, Math.hypot(e.pos.x - o.x, e.pos.y - o.y) - R);
+      if (d >= radius) continue;
+      if (raycastWalls(this.map, o.x, o.y, e.pos.x, e.pos.y) !== Infinity) continue;
+      const dmg = Math.round(damage * (1 - d / radius));
+      if (dmg > 0) this.pendingHits.push({ target: e.id, attacker, team, damage: dmg, charge, dir: Math.atan2(e.pos.y - o.y, e.pos.x - o.x) });
+    }
   }
 
   private impact(pos: Vec, kind: 'wall' | 'tank' | 'expire', charge: number, angle: number, projectile: number, target?: number): void {

@@ -74,7 +74,7 @@ export const SIMPLE_TUNING: SimpleTuning = {
 /** What a unit is reacting to; picks the line pool and the bubble's tone. */
 export type BarkKind =
   | 'sawSomething' | 'heardSomething' | 'heardShot' | 'investigate' | 'nothing'
-  | 'spotted' | 'hit' | 'critical' | 'reloading' | 'lost' | 'giveUp' | 'support' | 'allyDown';
+  | 'spotted' | 'hit' | 'heavyHit' | 'critical' | 'reloading' | 'lost' | 'giveUp' | 'support' | 'allyDown';
 
 /** Line pools. Picked deterministically (no RNG draw), so barks never change the simulation. */
 export const BARK_LINES: Record<BarkKind, readonly string[]> = {
@@ -85,6 +85,7 @@ export const BARK_LINES: Record<BarkKind, readonly string[]> = {
   nothing: ['Must have been nothing.', 'Just the wind.', 'Nothing here. Back to it.', 'Jumpy tonight…'],
   spotted: ['Enemy spotted!', 'Contact! Engaging!', 'Tank! Right there!', 'Hostile in sight!'],
   hit: ["I've been hit!", 'Taking fire!', "I'm hit! Where'd that come from?", 'Armour hit!'],
+  heavyHit: ["I've sustained major damage!", 'Major damage! Armour breached!', 'That went right through us!', "Heavy round! We're burning!"],
   critical: ['Hull breached!', "I can't take another one!", 'Need support, now!'],
   reloading: ['Reloading!', 'Loading!', 'Reloading, cover me!'],
   lost: ['Lost them. Searching.', 'Where did they go?', 'Lost visual!'],
@@ -97,11 +98,14 @@ export type BarkTone = 'calm' | 'sus' | 'combat';
 
 const BARK_TONE: Record<BarkKind, BarkTone> = {
   sawSomething: 'sus', heardSomething: 'sus', heardShot: 'sus', investigate: 'sus', nothing: 'calm', giveUp: 'calm',
-  spotted: 'combat', hit: 'combat', critical: 'combat', reloading: 'combat', lost: 'sus', support: 'sus', allyDown: 'combat',
+  spotted: 'combat', hit: 'combat', heavyHit: 'combat', critical: 'combat', reloading: 'combat', lost: 'sus', support: 'sus', allyDown: 'combat',
 };
 
+/** Damage from one hit that counts as a heavy (well-charged) round. */
+const HEAVY_HIT = 45;
+
 /** Urgent kinds cut through the per-unit cooldown sooner. */
-const URGENT: ReadonlySet<BarkKind> = new Set(['spotted', 'hit', 'critical', 'allyDown']);
+const URGENT: ReadonlySet<BarkKind> = new Set(['spotted', 'hit', 'heavyHit', 'critical', 'allyDown']);
 
 export interface SimpleBark {
   /** Speaking unit (tank id). */
@@ -301,10 +305,13 @@ export class SimpleController {
     for (const e of obs.events) {
       if (e.type === 'damage' && e.target === self.id) {
         u.focus = { x: e.fromX, y: e.fromY };
-        const critical = self.hp <= 30 && !u.saidCritical;
+        // A heavy (charged) round gets its own line: the crew knows the difference.
+        const heavy = e.amount >= HEAVY_HIT;
+        const critical = !heavy && self.hp <= 30 && !u.saidCritical;
         if (critical) u.saidCritical = true;
-        if (u.state !== 'combat') this.enterCombat(u, self, tick, 'hit');
-        else this.bark(u, critical ? 'critical' : 'hit', tick);
+        const kind: BarkKind = heavy ? 'heavyHit' : critical ? 'critical' : 'hit';
+        if (u.state !== 'combat') this.enterCombat(u, self, tick, heavy ? 'heavyHit' : 'hit');
+        else this.bark(u, kind, tick);
       }
     }
 

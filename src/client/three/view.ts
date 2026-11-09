@@ -49,6 +49,9 @@ interface TankVis {
   flash: number;
   /** Seconds since death (wreck animation), -1 while alive. */
   deadT: number;
+  /** Charge glow at the muzzle and a ring on the ground, scaled by the visible charge. */
+  glow: THREE.Sprite;
+  ring: THREE.Mesh;
   /** The turret blown off the wreck, flying until it lands. */
   toss: { vx: number; vy: number; vz: number; sx: number; sz: number; landed: boolean } | null;
 }
@@ -93,6 +96,11 @@ export class MissionView3D {
   private beamMats: THREE.ShaderMaterial[] = [];
   private tanks = new Map<number, TankVis>();
   private shellPool: THREE.Group[] = [];
+  private chargeRingGeo = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
+  /** Lights the player's hull while the cannon charges. Always present, so the light count never changes. */
+  private chargeLight = new THREE.PointLight(0xffb060, 0, 180, 2);
+  private wasFull = false;
+  private frameDt = 0;
   private ghosts: THREE.Mesh[] = [];
   private mist: Mist;
   private rain: Rain;
@@ -177,6 +185,7 @@ export class MissionView3D {
     this.sparks = new Sparks(scene);
     this.smoke = new SmokeFx(scene);
     this.flashes = new Flashes(scene);
+    scene.add(this.chargeLight);
     this.blasts = new Blasts(scene, {
       flash: (x, z, scale) => this.flashes.add(x, z, 'explosion', scale),
       sparks: (x, y, z, n, speed) => this.sparks.burst(x, y, z, 0, 0, n, speed),
@@ -486,6 +495,7 @@ export class MissionView3D {
     const t0 = performance.now();
     this.telemetry.frameStart(now);
     const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.frameDt = dt;
     this.last = now;
     const s = this.session;
 
@@ -558,7 +568,10 @@ export class MissionView3D {
     const me = cur.tanks.find((x) => x.id === s.playerId);
     this.d.audio.setEngine(me ? Math.hypot(me.vx, me.vy) : 0, !!me?.alive && !s.paused, !!me?.quiet);
     this.d.audio.setChargeHum(me && me.phase === 'charging' && !s.paused ? me.charge : 0);
-    this.hud.update(cur, me, this.mousePx, (x, y, h) => this.project(x, y, h), dt);
+    const full = !!me && me.phase === 'charging' && me.hold !== null;
+    if (full && !this.wasFull) this.d.audio.chargeFull();
+    this.wasFull = full;
+    this.hud.update(cur, me, this.mousePx, this.aim, (x, y, h) => this.project(x, y, h), dt);
     this.directAudio(now);
     this.renderMinimap(cur, selfPos);
     const tEnd = performance.now();
@@ -638,7 +651,13 @@ export class MissionView3D {
     if (!v) {
       const beam = coneMaterial(0xfff0cf, 0.06);
       this.beamMats.push(beam);
-      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, wheel: 0, last: null, dead: false, flash: 0, deadT: -1, toss: null };
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      glow.visible = false;
+      this.scene.add(glow);
+      const ring = new THREE.Mesh(this.chargeRingGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.1, 0.35), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      ring.visible = false;
+      this.scene.add(ring);
+      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, wheel: 0, last: null, dead: false, flash: 0, deadT: -1, toss: null, glow, ring };
       this.tanks.set(t.id, v);
     }
     return v;
@@ -682,14 +701,53 @@ export class MissionView3D {
       // Damaged tanks trail smoke, and burn when nearly dead.
       const health = t.hp / t.maxHp;
       if (health < 0.7) this.blasts.smolder(x, y, hull, Math.min(1, (0.7 - health) / 0.55), dt);
+      this.renderCharge(t, v, x, y, tur, dt);
       m.beam.visible = !t.quiet;
       if (t.id === this.session.playerId) self = { x, y };
     }
-    for (const [id, v] of this.tanks) if (!seen.has(id) && !v.dead) v.model.root.visible = false;
+    for (const [id, v] of this.tanks)
+      if (!seen.has(id) && !v.dead) {
+        v.model.root.visible = false;
+        v.glow.visible = v.ring.visible = false;
+      }
     return self;
   }
 
+  /**
+   * A charging cannon you can see: motes pulled into a glowing muzzle, a ring on the ground, a
+   * shuddering barrel once fully charged, and (for the player) a light on the hull. Enemies show it
+   * too, which is a warning: that tank is about to hit hard.
+   */
+  private renderCharge(t: TankView, v: TankVis, x: number, y: number, tur: number, dt: number): void {
+    const c = t.phase === 'charging' ? t.charge : 0;
+    const mine = t.id === this.session.playerId;
+    const full = t.hold !== null || c >= 1;
+    v.glow.visible = v.ring.visible = c > 0.02;
+    v.model.barrel.position.z = 0;
+    if (mine) this.chargeLight.intensity = 0;
+    if (c <= 0.02) return;
+    const now = performance.now() / 1000;
+    const pulse = full ? 0.75 + 0.25 * Math.sin(now * 18) : 1;
+    const mx = x + Math.cos(tur) * 34, mz = y + Math.sin(tur) * 34;
+    v.glow.position.set(mx, 21, mz);
+    v.glow.scale.setScalar((10 + 46 * c * c) * pulse);
+    v.glow.material.color.setRGB(1.2 + 3.2 * c, 0.5 + 1.8 * c * c, 0.15 + 1.4 * c * c * c);
+    v.glow.material.opacity = 0.35 + 0.65 * c;
+    v.ring.position.set(x, 1.2, y);
+    v.ring.scale.setScalar(30 + 22 * c + (full ? 6 * Math.sin(now * 9) : 0));
+    (v.ring.material as THREE.MeshBasicMaterial).opacity = (0.15 + 0.5 * c) * pulse;
+    if (full) v.model.barrel.position.z = (Math.random() - 0.5) * 0.9;
+    this.blasts.chargeMotes(mx, 21, mz, c, dt);
+    if (mine) {
+      // held above the barrel so it washes the hull, not a wall the tank is parked against
+      this.chargeLight.position.set(x + Math.cos(tur) * 20, 46, y + Math.sin(tur) * 20);
+      this.chargeLight.intensity = 30000 * c * c * pulse;
+    }
+  }
+
   private wreck(id: number, x: number, y: number): void {
+    const vv = this.tanks.get(id);
+    if (vv) vv.glow.visible = vv.ring.visible = false;
     const v = this.tanks.get(id);
     if (!v) return;
     v.dead = true;
@@ -762,6 +820,10 @@ export class MissionView3D {
       g.visible = true;
       g.position.set(x, 20, y);
       g.rotation.y = -Math.atan2(p.vy, p.vx);
+      // charged rounds are bigger, hotter and shed embers
+      g.scale.set(1 + p.charge * 0.8, 1 + p.charge * 1.4, 1 + p.charge * 1.4);
+      (g.children[1] as THREE.Sprite).scale.setScalar(26 + 40 * p.charge);
+      if (p.charge > 0.3) this.blasts.trail(x, 20, y, p.charge, this.frameDt);
     });
   }
 
@@ -791,8 +853,12 @@ export class MissionView3D {
     switch (e.type) {
       case 'shot': {
         const v = this.tanks.get(e.tank);
-        if (v) v.recoil = 1;
-        this.flashes.add(e.x, e.y, 'muzzle');
+        if (v) v.recoil = 1 + e.charge;
+        this.flashes.add(e.x, e.y, 'muzzle', 1 + 1.6 * e.charge);
+        if (e.charge > 0.45) {
+          const from = this.session.obs.tanks.find((t) => t.id === e.tank);
+          this.blasts.muzzleBlast(from ? from.x : e.x, from ? from.y : e.y, e.angle, e.charge);
+        }
         this.sparks.burst(e.x, 22, e.y, -Math.cos(e.angle), -Math.sin(e.angle), 10, 160);
         if (e.tank === pid && !reduced) this.shake = Math.max(this.shake, 4 + e.charge * 8);
         this.d.audio.shot(e.charge, this.pan(e.x), e.tank === pid ? 0.9 : 0.75 * this.vol(e.x, e.y, 1100));
@@ -800,6 +866,12 @@ export class MissionView3D {
       }
       case 'impact':
         if (e.kind === 'tank') this.blasts.hit(e.x, e.y, e.angle, e.charge);
+        // A charged round bursts: a blast sized to its splash, with its own boom.
+        if (e.charge >= TUNING.cannon.splashFrom && e.kind !== 'expire') {
+          const k = (e.charge - TUNING.cannon.splashFrom) / (1 - TUNING.cannon.splashFrom);
+          this.blasts.explode(e.x, e.y, 0.35 + 0.7 * k);
+          this.decals.addScorch(e.x, e.y, 0.9 + 0.8 * k);
+        }
         this.flashes.add(e.x, e.y, 'impact');
         this.sparks.burst(e.x, 10, e.y, Math.cos(e.angle), Math.sin(e.angle), 30 + Math.round(e.charge * 30), 260);
         if (e.kind !== 'tank') this.decals.addScorch(e.x, e.y, 0.5 + e.charge * 0.5);

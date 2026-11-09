@@ -34,6 +34,8 @@ export interface TankView {
   /** Remaining hold-window ticks at full charge, else null. */
   hold: number | null;
   weaponTimer: number;
+  /** Own team only: length of the current reload in ticks (heavier shots reload longer). */
+  reloadTicks: number;
   silent: boolean;
   quiet: boolean;
   protected: boolean;
@@ -164,6 +166,7 @@ export class TeamObserver {
         charge: chargeFraction(t.weapon),
         hold: holdRemaining(t.weapon),
         weaponTimer: own ? t.weapon.timer : 0,
+        reloadTicks: own ? t.weapon.reloadTicks : 0,
         silent: t.silent,
         quiet: t.quiet,
         protected: t.protectedUntil > tick,

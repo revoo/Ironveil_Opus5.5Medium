@@ -342,7 +342,7 @@ export class HudScene extends Phaser.Scene {
       // tap/full markers
       g.fillStyle(0xffffff, 0.5).fillRect(x + 64 + bw - 2, wy - 3, 2, 26);
     } else if (me.phase === 'reloading') {
-      const f = 1 - me.weaponTimer / WEAPON_TICKS.reload;
+      const f = 1 - me.weaponTimer / Math.max(1, me.reloadTicks);
       g.fillStyle(0x4a5868, 1).fillRect(x + 64, wy, bw * f, 20);
       label = 'RELOADING';
       col = UI.muted;

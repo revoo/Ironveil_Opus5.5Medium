@@ -150,7 +150,8 @@ export class LocalSession {
   private tick(playerInput: TankInput): void {
     if (this.needsFreshInput) {
       if (!playerInput.fireHeld) this.needsFreshInput = false;
-      playerInput = { ...playerInput, fireHeld: false, firePressed: false, fireReleased: false };
+      // A charge held through the pause is cancelled, not fired.
+      playerInput = { ...playerInput, fireHeld: false, firePressed: false, fireReleased: false, cancel: true };
     }
     const inputs: Record<number, TankInput> = { [this.playerId]: playerInput };
     const enemyObs = this.observers[1].observe(this.world);

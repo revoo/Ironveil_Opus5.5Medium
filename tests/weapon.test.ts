@@ -3,7 +3,7 @@ import { stepWeapon, WEAPON_TICKS, shotStats, chargeFraction, chargeSpeedFactor,
 import { neutralInput, type TankInput, type WeaponState } from '../src/sim/types';
 import { TUNING } from '../src/sim/tuning';
 
-const W = (): WeaponState => ({ phase: 'ready', timer: 0, chargeTicks: 0 });
+const W = (): WeaponState => ({ phase: 'ready', timer: 0, chargeTicks: 0, reloadTicks: 0 });
 const inp = (p: Partial<TankInput>): TankInput => ({ ...neutralInput(), ...p });
 const press = inp({ firePressed: true, fireHeld: true });
 const hold = inp({ fireHeld: true });
@@ -96,9 +96,9 @@ describe('weapon timing', () => {
     interruptCharge(w);
     expect(w.phase).toBe('cancel');
     expect(w.timer).toBe(WEAPON_TICKS.cancel);
-    const r: WeaponState = { phase: 'reloading', timer: 15, chargeTicks: 0 };
+    const r: WeaponState = { phase: 'reloading', timer: 15, chargeTicks: 0, reloadTicks: 20 };
     interruptCharge(r);
-    expect(r).toEqual({ phase: 'reloading', timer: 15, chargeTicks: 0 });
+    expect(r).toEqual({ phase: 'reloading', timer: 15, chargeTicks: 0, reloadTicks: 20 });
   });
 
   it('a release without a press does nothing', () => {

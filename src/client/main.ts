@@ -37,7 +37,7 @@ input.attach(document.body);
 // Browsers only allow audio after a gesture: the first click anywhere starts the menu score.
 document.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 document.addEventListener('keydown', () => audio.unlock(), { once: true });
-(window as unknown as { __ironveil: unknown }).__ironveil = { game, hud: () => hud, settings, audio, mission: () => activeMission() };
+(window as unknown as { __ironveil: unknown }).__ironveil = { game, hud: () => hud, settings, audio, mission: () => activeMission(), view: () => view3d };
 
 /** The active 3D mission view, if a mission is running. */
 let view3d: MissionView3D | null = null;
@@ -184,7 +184,7 @@ function howTo(back: () => void): void {
       <ul class="tips">
         <li><b>${k('up')}, ${k('left')}, ${k('down')}, ${k('right')}</b> — drive in that world direction immediately. The tank keeps its momentum: tap the opposite direction to brake, steer early to drift through corners.</li>
         <li><b>Mouse</b> aims; the turret traverses toward it (the gold ring shows where the barrel really points).</li>
-        <li><b>Hold ${k('fire')}</b> to charge, <b>release</b> to fire. Taps are quick and deal steady damage; full charge hits hard and flies fast but slows you and is audible. At full charge you have 1.5 s before the cannon vents and the shot is lost. <b>${k('cancel')}</b> cancels.</li>
+        <li><b>Hold ${k('fire')}</b> to charge, <b>release</b> to fire. Taps are quick (22 damage, fast reload). Damage climbs steeply with charge: a full charge deals 80, flies fastest and bursts on impact, hurting enemies near the hit, but slows you, is audible and reloads slowly. Past half charge the shell bursts. The cursor shows the damage, and <b>LETHAL</b> when it would kill your target. At full charge you have 1.5 s before the cannon vents and the shot is lost. <b>${k('cancel')}</b> cancels.</li>
         <li><b>${k('smoke')}</b> drops a smoke cloud that blocks sight for everyone (not shells). 18 s cooldown.</li>
         <li><b>Hold ${k('silent')}</b> for silent running: slow and quiet. It doesn't make you invisible, and you still leave tracks in mud.</li>
         <li>Brush hides you beyond close range until you fire. Coloured arcs around your tank show what you <i>hear</i> but can't see: <span style="color:#ff5a3a">shots</span>, <span style="color:#ffd23a">charging</span>, <span style="color:#e8eef5">engines</span>.</li>

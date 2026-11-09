@@ -150,7 +150,7 @@ export class AudioEngine {
     if (!this.radio) return;
     const flavour: BarkFlavour =
       kind === 'nothing' || kind === 'giveUp' ? 'calm'
-      : kind === 'hit' || kind === 'critical' ? 'hit'
+      : kind === 'hit' || kind === 'heavyHit' || kind === 'critical' ? 'hit'
       : kind === 'allyDown' ? 'priority'
       : kind === 'spotted' || kind === 'reloading' ? 'contact'
       : 'alert';
@@ -282,6 +282,11 @@ export class AudioEngine {
     this.tone('sine', 150 - charge * 70, 38, 0.25 + charge * 0.45, body, 1.1);
     this.tone('square', 90 - charge * 30, 30, 0.08 + charge * 0.1, o, 0.25);
     if (charge > 0.5) this.noise(0.9 * charge, o, 'lowpass', 900, 0.5, 120, 0.02, 0.35);
+    if (charge > 0.7) {
+      // a full charge: a concussive slam and a long rolling tail
+      this.tone('sine', 55, 24, 1.1 * charge, this.driven(o, 0.7), 1.2, 0.004);
+      this.noise(1.6 * charge, o, 'lowpass', 600, 0.5, 60, 0.03, 0.5);
+    }
     if (vol > 0.6) this.score?.duck(0.2 + charge * 0.2, 0.5);
   }
 
@@ -365,6 +370,14 @@ export class AudioEngine {
     const n = 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) setTimeout(() => this.ctx && this.noise(0.015 + Math.random() * 0.03, o, 'bandpass', 1500 + Math.random() * 3000, 1.5, undefined, 0.001, 0.8), i * (30 + Math.random() * 90));
     if (Math.random() < 0.25) this.noise(0.4, o, 'lowpass', 400, 0.5, 150, 0.05, 0.4); // a whoomph of flame
+  }
+
+  /** The cannon reaches full charge: a rising two-note lock tone, so you know without looking. */
+  chargeFull(): void {
+    if (!this.ctx) return;
+    const o = this.out(0, 0.22, 0.1);
+    this.tone('triangle', 880, 880, 0.07, o, 0.6);
+    setTimeout(() => this.ctx && this.tone('triangle', 1320, 1320, 0.12, this.out(0, 0.22, 0.1), 0.6), 70);
   }
 
   /** Heavy metal landing (a turret thrown off a wreck). */

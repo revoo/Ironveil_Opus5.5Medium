@@ -47,11 +47,19 @@ export const TUNING = {
     chargeTime: 1.5,
     holdAllowance: 1.5,
     damageMin: 22,
-    damageMax: 55,
+    damageMax: 80,
+    /** Damage rises as charge^curve: partial charges stay close to a tap, a full charge is decisive. */
+    damageCurve: 1.6,
     speedMin: 400,
-    speedMax: 750,
+    speedMax: 950,
     range: 900,
+    /** Reload after a tap; grows with charge squared up to `reloadMax` after a full charge. */
     reload: 0.65,
+    reloadMax: 1.7,
+    /** Shells charged past `splashFrom` burst on impact: up to `splashDamage` within `splashRadius` (full charge). */
+    splashFrom: 0.5,
+    splashRadius: 95,
+    splashDamage: 26,
     cancelRecovery: 0.25,
     ventRecovery: 0.8,
     muzzleDistance: 30,

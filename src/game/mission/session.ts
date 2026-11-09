@@ -384,7 +384,9 @@ export class MissionSession {
   tick(playerInput: TankInput = neutralInput()): void {
     if (this.needsFreshInput) {
       if (!playerInput.fireHeld) this.needsFreshInput = false;
-      playerInput = { ...playerInput, fireHeld: false, firePressed: false, fireReleased: false };
+      // After a pause the trigger must be pressed afresh. A charge held through the pause is
+      // cancelled, not fired: letting go of a key you were holding in a menu isn't a shot.
+      playerInput = { ...playerInput, fireHeld: false, firePressed: false, fireReleased: false, cancel: true };
     }
     const enemyObs = this.observers[1].observe(this.world);
     const inputs: Record<number, TankInput> = { [this.playerId]: playerInput, ...this.simple.update(enemyObs) };

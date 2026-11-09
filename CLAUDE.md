@@ -58,7 +58,7 @@ npm run dev         # http://localhost:5173
 - `V` toggles the performance telemetry overlay (`three/telemetry.ts`); it sets `renderer.info.autoReset = false`.
 - Audio only starts after a user gesture (`audio.unlock()` on first pointer/key). `audio.tap()`
   exposes the final mix for recording previews.
-- Debug hook in the browser: `window.__ironveil` → `{ game, hud, settings, audio, mission() }`.
+- Debug hook in the browser: `window.__ironveil` → `{ game, hud, settings, audio, mission(), view() }` (`view().aim` is the world point under the cursor).
   Headless screenshots: Playwright + SwiftShader; the sim runs in slow motion there, so tests
   teleport the player via `__ironveil.mission().world.tank(0).pos`.
 

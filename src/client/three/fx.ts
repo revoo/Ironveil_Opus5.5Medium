@@ -388,7 +388,7 @@ export class Flashes {
   add(x: number, z: number, kind: 'muzzle' | 'impact' | 'explosion', scale = 1): void {
     const f: Flash =
       kind === 'muzzle'
-        ? { x, z, y: 22, t: 0, dur: 0.12, size: 46, light: 300000 }
+        ? { x, z, y: 22, t: 0, dur: 0.1 + 0.08 * scale, size: 46 * scale, light: 300000 * scale }
         : kind === 'impact'
           ? { x, z, y: 14, t: 0, dur: 0.35, size: 90, light: 520000 }
           : { x, z, y: 24, t: 0, dur: 0.35 + 0.3 * scale, size: 150 * scale, light: 450000 * scale };

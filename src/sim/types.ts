@@ -41,6 +41,8 @@ export interface WeaponState {
   timer: number;
   /** Elapsed ticks while charging. */
   chargeTicks: number;
+  /** Length of the current reload in ticks (heavier shots reload longer). */
+  reloadTicks: number;
 }
 
 export interface Tank {

@@ -31,9 +31,21 @@ export function chargeSpeedFactor(w: WeaponState): number {
 
 export function shotStats(charge: number): { damage: number; speed: number } {
   return {
-    damage: Math.round(lerp(C.damageMin, C.damageMax, charge)),
+    damage: Math.round(lerp(C.damageMin, C.damageMax, Math.pow(charge, C.damageCurve))),
     speed: lerp(C.speedMin, C.speedMax, charge),
   };
+}
+
+/** Reload ticks after a shot of this charge: a tap is quick, a full charge commits you. */
+export function reloadTicksFor(charge: number): number {
+  return ticks(lerp(C.reload, C.reloadMax, charge * charge));
+}
+
+/** Splash of a charged shell: 0 below `splashFrom`, then radius and peak damage grow to full charge. */
+export function splashStats(charge: number): { radius: number; damage: number } {
+  if (charge < C.splashFrom) return { radius: 0, damage: 0 };
+  const k = (charge - C.splashFrom) / (1 - C.splashFrom);
+  return { radius: C.splashRadius * (0.55 + 0.45 * k), damage: C.splashDamage * (0.35 + 0.65 * k) };
 }
 
 /** Remaining hold-window ticks once fully charged (null if not fully charged). */
@@ -98,7 +110,7 @@ export function stepWeapon(w: WeaponState, input: TankInput): WeaponStepResult {
 function fire(w: WeaponState, res: WeaponStepResult): WeaponStepResult {
   res.fired = chargeFraction(w);
   w.phase = 'reloading';
-  w.timer = WEAPON_TICKS.reload;
+  w.timer = w.reloadTicks = reloadTicksFor(res.fired);
   w.chargeTicks = 0;
   return res;
 }

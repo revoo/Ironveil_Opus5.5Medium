@@ -257,6 +257,34 @@ export class Blasts {
       this.spawn('smoke', { x, y: 18, z, vx: bx * between(10, 30), vy: between(15, 35), vz: bz * between(10, 30), life: between(1, 1.8), s0: 16, s1: 50 + charge * 30, spin: between(-0.5, 0.5), alpha: 0.55 });
   }
 
+  /** Charging: hot motes drawn into the muzzle, faster and denser as the charge builds. */
+  chargeMotes(x: number, y: number, z: number, level: number, dt: number): void {
+    if (level <= 0) return;
+    const n = dt * (10 + 50 * level);
+    const count = Math.floor(n) + (R() < n % 1 ? 1 : 0);
+    for (let i = 0; i < count; i++) {
+      const a = R() * 6.28, b = (R() - 0.3) * 1.2, r = 26 + 18 * level;
+      const ox = Math.cos(a) * Math.cos(b) * r, oy = Math.sin(b) * r * 0.6, oz = Math.sin(a) * Math.cos(b) * r;
+      const life = 0.22 + R() * 0.08;
+      this.spawn('flame', { x: x + ox, y: y + oy, z: z + oz, vx: -ox / life, vy: -oy / life, vz: -oz / life, life, s0: 2 + 3 * level, s1: 5 + 6 * level, spin: 0, alpha: 0.35 + 0.45 * level });
+    }
+  }
+
+  /** A charged shell's tracer: embers shed along its path. */
+  trail(x: number, y: number, z: number, charge: number, dt: number): void {
+    if (R() < dt * 70 * charge) this.spawn('flame', { x, y, z, vx: between(-8, 8), vy: between(5, 20), vz: between(-8, 8), life: between(0.15, 0.3), s0: 6 + 10 * charge, s1: 2, spin: 0, alpha: 0.9 });
+  }
+
+  /** A heavy shot leaving the barrel: a ring of blast on the ground and a cone of smoke ahead. */
+  muzzleBlast(x: number, z: number, angle: number, charge: number): void {
+    this.ring(x, z, 0.25 + 0.45 * charge);
+    const fx = Math.cos(angle), fz = Math.sin(angle);
+    for (let i = 0; i < Math.round(4 + 8 * charge); i++)
+      this.spawn('smoke', { x: x + fx * 30, y: 18, z: z + fz * 30, vx: fx * between(40, 140) + between(-30, 30), vy: between(5, 25), vz: fz * between(40, 140) + between(-30, 30), life: between(0.8, 1.6), s0: 14, s1: 50 + 30 * charge, spin: between(-0.5, 0.5), alpha: 0.4 });
+    for (let i = 0; i < Math.round(3 + 6 * charge); i++)
+      this.spawn('fire', { x: x + fx * 32, y: 20, z: z + fz * 32, vx: fx * between(80, 220), vy: between(-5, 15), vz: fz * between(80, 220), life: between(0.08, 0.16), s0: 14 + 12 * charge, s1: 30 + 30 * charge, spin: 0, alpha: 1 });
+  }
+
   /** A damaged tank trails smoke, and flames once it is nearly dead. `level` 0..1 = how badly. */
   smolder(x: number, z: number, hull: number, level: number, dt: number): void {
     if (level <= 0) return;

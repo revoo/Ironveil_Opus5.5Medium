@@ -31,7 +31,7 @@ npm run build && npm run preview     # production build on http://localhost:4173
 |---|---|
 | **W A S D** | Drive. In missions, movement is screen-relative (W = up the screen). Momentum carries: tap the opposite direction to brake, steer early to drift. |
 | **Mouse** | Aim. The ring on the cursor shows the cannon: filling = reloading or charging. |
-| **Space** (hold → release) or LMB | Charge, then fire. A tap is quick and light; full charge is heavy, slows you and is audible, and vents after 1.5 s. |
+| **Space** (hold → release) or LMB | Charge, then fire. A tap: 22 damage, 0.65 s reload. Full charge (1.5 s): 80 damage, a faster shell and a blast that hits nearby enemies (not through walls), but you slow down, can be heard, reload for 1.7 s, and the cannon vents if you hold past 1.5 s. The HUD shows the damage you'll do and LETHAL when it kills what you aim at. |
 | **Right mouse** / E | Cancel a charge |
 | **Q** | Smoke |
 | **Shift** (hold) | Silent running: slow and quiet |
