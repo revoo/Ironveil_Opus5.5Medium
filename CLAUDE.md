@@ -50,6 +50,9 @@ npm run dev         # http://localhost:5173
   that pass (see `buildComposer` in `view.ts`), or AO wraps around mist and light cones.
 - Static scenery is merged per material (`mergeStatic`) for draw calls; anything that must move or
   change per frame (lamp bulbs via shared material colour, tanks) stays separate.
+- Garrison barks (`BARK_LINES` in `ai/simple.ts`) are not radio: the 3D HUD draws them as callouts
+  over visible speakers and `Radio.bark` plays them panned. Line choice must not draw from the AI RNG.
+- `V` toggles the performance telemetry overlay (`three/telemetry.ts`); it sets `renderer.info.autoReset = false`.
 - Audio only starts after a user gesture (`audio.unlock()` on first pointer/key). `audio.tap()`
   exposes the final mix for recording previews.
 - Debug hook in the browser: `window.__ironveil` → `{ game, hud, settings, audio, mission() }`.
@@ -75,8 +78,8 @@ The owner tests through private claude.ai artifacts. Republish to the same URL a
 
 - `main` holds everything; work on short-lived branches off `main`. The Render Lab rendering
   experiment is preserved on the read-only branch `archive/poc-render-tech`; its code now lives
-  in `src/client/three/`. Merged fix branches (e.g. `fix/headlight-shader-recompile`) can be
-  deleted by the owner.
+  in `src/client/three/`. Merged branches (`fix/headlight-shader-recompile`, `feat/perf-telemetry`,
+  `feat/enemy-barks`) can be deleted by the owner.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Planned: crew system phase 1, Ink dialogue, first real LDtk mission, recorded CC0 weapon/engine
   samples to replace the weakest synthesised SFX.
