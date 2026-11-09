@@ -23,7 +23,7 @@ import type { Settings } from '../settings';
 import { buildEnvironment, procUniforms } from './materials';
 import { buildTank, radialTexture, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
-import { CueArcs, Decals, Flashes, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
+import { CueArcs, Decals, Flashes, GlowLights, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
 import { Blasts } from './blast';
 import { Comms } from './comms';
 import { Hud3D } from './hud';
@@ -102,7 +102,9 @@ export class MissionView3D {
   private shellPool: THREE.Group[] = [];
   private chargeRingGeo = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
   /** Lights the player's hull while the cannon charges. Always present, so the light count never changes. */
-  private chargeLight = new THREE.PointLight(0xffb060, 0, 180, 2);
+  private glow: GlowLights;
+  /** Moon shadow cache: what the shadow map was last drawn with. */
+  private moonKey: number[] = [];
   private lampLights!: LampLights;
   private lampK: number[] = [];
   private dynRes = new DynamicResolution();
@@ -176,6 +178,8 @@ export class MissionView3D {
     this.moon = new THREE.DirectionalLight(0xa9c0d4, 1.2);
     this.moonOffset = new THREE.Vector3(-520, 950, -650);
     this.moon.castShadow = true;
+    this.moon.shadow.autoUpdate = false;
+    this.moon.shadow.needsUpdate = true;
     const low = d.settings.lowEffects;
     this.moon.shadow.mapSize.setScalar(low ? 1024 : 2048);
     this.moon.shadow.bias = -0.0003;
@@ -198,11 +202,12 @@ export class MissionView3D {
     this.decals = new Decals(scene);
     this.sparks = new Sparks(scene);
     this.smoke = new SmokeFx(scene);
-    this.flashes = new Flashes(scene);
-    scene.add(this.chargeLight);
+    this.glow = new GlowLights(scene);
+    this.flashes = new Flashes(scene, this.glow);
     this.blasts = new Blasts(scene, {
       flash: (x, z, scale) => this.flashes.add(x, z, 'explosion', scale),
       sparks: (x, y, z, n, speed) => this.sparks.burst(x, y, z, 0, 0, n, speed),
+      glow: (r) => this.glow.request(r),
       boom: (x, z, size, main) => {
         this.lampLights.blast(x, z);
         const vol = Math.max(0.2, this.vol(x, z, 1500));
@@ -453,6 +458,25 @@ export class MissionView3D {
     this.moon.target.updateMatrixWorld();
   }
 
+  /**
+   * The moon's shadow map only needs redrawing when the view moved (its frustum follows the camera,
+   * snapped to texels) or something that casts a shadow moved: a tank, its turret or barrel, a
+   * settling wreck, flying debris. Sitting still in cover, it's drawn once instead of every frame.
+   */
+  private cacheMoonShadow(): void {
+    const key: number[] = [this.moon.position.x, this.moon.position.z, this.moon.shadow.camera.right, this.blasts.debrisInFlight ? Math.random() : 0];
+    for (const v of this.tanks.values()) {
+      const m = v.model;
+      if (!m.root.visible) continue;
+      if (v.dead && v.deadT < 8) key.push(Math.random()); // wreck still settling, turret in the air
+      key.push(m.root.position.x, m.root.position.y, m.root.position.z, m.root.rotation.y, m.turret.rotation.y, m.barrel.position.x, m.barrel.position.z);
+    }
+    const old = this.moonKey;
+    const same = old.length === key.length && key.every((k, i) => Math.abs(k - old[i]!) < 0.01);
+    if (!same) this.moon.shadow.needsUpdate = true;
+    this.moonKey = key;
+  }
+
   /** Screen-relative WASD: W moves up the screen whatever the camera angle. */
   private screenRelative(mx: number, my: number): Vec {
     const f = new THREE.Vector3();
@@ -502,6 +526,7 @@ export class MissionView3D {
       this.moon.shadow.mapSize.setScalar(moonSize);
       this.moon.shadow.map?.dispose();
       this.moon.shadow.map = null;
+      this.moon.shadow.needsUpdate = true;
     }
     this.resize();
   }
@@ -573,6 +598,7 @@ export class MissionView3D {
 
     const cur = s.obs, prev = s.prevObs, a = s.alpha;
     this.headlights.begin();
+    this.glow.begin();
     const selfPos = this.renderTanks(prev, cur, a, dt);
     this.headlights.end(selfPos);
     this.renderShells(prev, cur, a);
@@ -609,12 +635,14 @@ export class MissionView3D {
     this.smoke.update(cur, dt, this.camera);
     this.rain.update(dt, this.camTarget.x, this.camTarget.z);
     this.flashes.update(dt);
-    this.blasts.update(dt, { x: this.camTarget.x, z: this.camTarget.z });
+    this.blasts.update(dt);
     this.animateWrecks(dt);
     this.arcs.update(dt, selfPos);
     this.renderReticle(cur, selfPos);
     (this.grade.uniforms.uTime as { value: number }).value = t;
     (this.grade.uniforms.uHurt as { value: number }).value = this.hurt;
+    this.glow.end({ x: this.camTarget.x, z: this.camTarget.z });
+    this.cacheMoonShadow();
     const tRender = performance.now();
     this.telemetry.gpuBegin();
     this.composer.render();
@@ -805,7 +833,6 @@ export class MissionView3D {
     const full = t.hold !== null || c >= 1;
     v.glow.visible = v.ring.visible = c > 0.02;
     v.model.barrel.position.z = 0;
-    if (mine) this.chargeLight.intensity = 0;
     if (c <= 0.02) return;
     const now = performance.now() / 1000;
     const pulse = full ? 0.75 + 0.25 * Math.sin(now * 18) : 1;
@@ -821,8 +848,7 @@ export class MissionView3D {
     this.blasts.chargeMotes(mx, 21, mz, c, dt);
     if (mine) {
       // held above the barrel so it washes the hull, not a wall the tank is parked against
-      this.chargeLight.position.set(x + Math.cos(tur) * 20, 46, y + Math.sin(tur) * 20);
-      this.chargeLight.intensity = 30000 * c * c * pulse;
+      this.glow.request({ x: x + Math.cos(tur) * 20, y: 46, z: y + Math.sin(tur) * 20, intensity: 30000 * c * c * pulse, distance: 180, color: 0xffb060 });
     }
   }
 

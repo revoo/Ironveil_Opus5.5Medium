@@ -55,6 +55,8 @@ npm run dev         # http://localhost:5173
 - Lamp lights are a fixed pool (`three/lamps.ts`) with `shadow.autoUpdate = false`: their shadow maps redraw
   only near movers (`view.movers()`) and blasts. A new moving shadow caster must be added there, or it won't
   show in lamp light. Light counts never change at runtime (shader recompiles). See D30.
+- The moon shadow is cached too (`cacheMoonShadow` in `view.ts`): a new moving caster must go into its key.
+  Short-lived effect lights request from the shared `GlowLights` pool (fx.ts) each frame; never add a PointLight. See D32.
 - Garrison barks (`BARK_LINES` in `ai/simple.ts`) are not radio: the 3D HUD draws them as callouts
   over visible speakers and `Radio.bark` plays them panned. Line choice must not draw from the AI RNG.
 - Crew radio goes through `Comms` (three/comms.ts), which owns the queue and timing and calls

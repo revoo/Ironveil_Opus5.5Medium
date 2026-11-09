@@ -370,19 +370,16 @@ interface Flash {
 }
 export class Flashes {
   private sprites: THREE.Sprite[] = [];
-  private lights: THREE.PointLight[] = [];
   private list: Flash[] = [];
-  constructor(scene: THREE.Scene) {
+  constructor(
+    scene: THREE.Scene,
+    private glow: GlowLights,
+  ) {
     for (let i = 0; i < 12; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture, color: new THREE.Color(4, 2.2, 0.8), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       s.visible = false;
       scene.add(s);
       this.sprites.push(s);
-    }
-    for (let i = 0; i < 3; i++) {
-      const l = new THREE.PointLight(0xffa04a, 0, 380, 2);
-      scene.add(l);
-      this.lights.push(l);
     }
   }
   add(x: number, z: number, kind: 'muzzle' | 'impact' | 'explosion', scale = 1): void {
@@ -407,16 +404,61 @@ export class Flashes {
       s.scale.setScalar(f.size * (0.6 + 0.4 * k));
       s.material.opacity = k;
     });
-    const byLight = [...this.list].sort((a, b) => b.light * (1 - b.t / b.dur) - a.light * (1 - a.t / a.dur));
+    for (const f of this.list) {
+      const k = 1 - f.t / f.dur;
+      this.glow.request({ x: f.x, y: f.y + 6, z: f.z, intensity: f.light * k * k, distance: 380, color: 0xffa04a });
+    }
+  }
+}
+
+// ---------------------------------------------------------------- effect lights
+export interface GlowRequest {
+  x: number;
+  y: number;
+  z: number;
+  intensity: number;
+  distance: number;
+  color: number;
+}
+
+/**
+ * One small pool of point lights shared by every short-lived effect (muzzle and explosion flashes,
+ * burning wrecks, the charging cannon). Each light is paid for by every lit pixel even at intensity
+ * 0, so instead of each effect owning its own (six in all), effects request light each frame and the
+ * brightest requests near the view get the pool. Colour and range are per request (uniforms only:
+ * no shader recompile).
+ */
+export class GlowLights {
+  static readonly COUNT = 3;
+  private lights: THREE.PointLight[] = [];
+  private reqs: GlowRequest[] = [];
+  constructor(scene: THREE.Scene) {
+    for (let i = 0; i < GlowLights.COUNT; i++) {
+      const l = new THREE.PointLight(0xffa04a, 0, 300, 2);
+      scene.add(l);
+      this.lights.push(l);
+    }
+  }
+  begin(): void {
+    this.reqs.length = 0;
+  }
+  request(r: GlowRequest): void {
+    if (r.intensity > 0) this.reqs.push(r);
+  }
+  /** Assign the pool to the strongest requests, discounted by distance from the view centre. */
+  end(focus: { x: number; z: number }): void {
+    const score = (r: GlowRequest) => r.intensity / (1 + ((r.x - focus.x) ** 2 + (r.z - focus.z) ** 2) / 640000);
+    if (this.reqs.length > GlowLights.COUNT) this.reqs.sort((a, b) => score(b) - score(a));
     this.lights.forEach((l, i) => {
-      const f = byLight[i];
-      if (!f) {
+      const r = this.reqs[i];
+      if (!r) {
         l.intensity = 0;
         return;
       }
-      const k = 1 - f.t / f.dur;
-      l.position.set(f.x, f.y + 6, f.z);
-      l.intensity = f.light * k * k;
+      l.position.set(r.x, r.y, r.z);
+      l.intensity = r.intensity;
+      l.distance = r.distance;
+      l.color.setHex(r.color);
     });
   }
 }

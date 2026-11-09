@@ -5,6 +5,7 @@
 // Everything is pooled and allocated up front (the shader warm-up compiles it once), so a busy
 // fight never creates materials or changes the light count mid-game.
 import * as THREE from 'three';
+import type { GlowRequest } from './fx';
 import { canvasTexture, radialTexture, rand } from './models';
 
 /** What a boom asks of the rest of the view: light, sparks, sound and camera shake. */
@@ -15,6 +16,8 @@ export interface BlastHooks {
   boom(x: number, z: number, size: number, main: boolean): void;
   shake(x: number, z: number, amount: number): void;
   crackle(x: number, z: number): void;
+  /** Ask the shared effect-light pool for light this frame. */
+  glow(r: GlowRequest): void;
 }
 
 type PKind = 'fire' | 'smoke' | 'flame';
@@ -124,8 +127,11 @@ export class Blasts {
   private nextRing = 0;
   private chunks: Chunk[] = [];
   private debris: THREE.InstancedMesh;
+  /** Debris chunks are flying this frame (shadows that move). */
+  get debrisInFlight(): boolean {
+    return this.debris.count > 0;
+  }
   private fires: Fire[] = [];
-  private fireLights: THREE.PointLight[] = [];
   private pending: Pending[] = [];
   private clock = 0;
   private m = new THREE.Matrix4();
@@ -176,11 +182,6 @@ export class Blasts {
     this.debris.castShadow = true;
     this.debris.setColorAt(0, new THREE.Color());
     scene.add(this.debris);
-    for (let i = 0; i < 2; i++) {
-      const l = new THREE.PointLight(0xff7a2a, 0, 300, 2);
-      scene.add(l);
-      this.fireLights.push(l);
-    }
   }
 
   // ------------------------------------------------------------------ emitters
@@ -297,7 +298,7 @@ export class Blasts {
   }
 
   // ------------------------------------------------------------------ update
-  update(dt: number, focus: { x: number; z: number }): void {
+  update(dt: number): void {
     this.clock += dt;
     // scheduled cook-offs
     if (this.pending.length) {
@@ -324,17 +325,11 @@ export class Blasts {
       }
     }
     this.fires = this.fires.filter((f) => f.t < f.life);
-    // two flickering lights on the burning wrecks nearest the camera
-    const near = [...this.fires].sort((a, b) => Math.hypot(a.x - focus.x, a.z - focus.z) - Math.hypot(b.x - focus.x, b.z - focus.z));
-    this.fireLights.forEach((l, i) => {
-      const f = near[i];
-      if (!f) {
-        l.intensity = 0;
-        return;
-      }
+    // flickering light on burning wrecks (the shared pool keeps those nearest the view)
+    this.fires.forEach((f, i) => {
       const k = Math.max(0, 1 - f.t / f.life);
-      l.position.set(f.x, 30, f.z);
-      l.intensity = 260000 * k * (0.75 + 0.25 * Math.sin(this.clock * 23 + i * 3) * Math.sin(this.clock * 7.3 + i));
+      const intensity = 260000 * k * (0.75 + 0.25 * Math.sin(this.clock * 23 + i * 3) * Math.sin(this.clock * 7.3 + i));
+      this.hooks.glow({ x: f.x, y: 30, z: f.z, intensity, distance: 300, color: 0xff7a2a });
     });
 
     this.drawParticles(this.fire, this.fireSprites, dt);
