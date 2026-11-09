@@ -28,6 +28,7 @@ import { Blasts } from './blast';
 import { Comms } from './comms';
 import { Hud3D } from './hud';
 import { Telemetry } from './telemetry';
+import { LampLights } from './lamps';
 import { codeLabel } from '../settings';
 
 export interface MissionViewDeps {
@@ -100,6 +101,8 @@ export class MissionView3D {
   private chargeRingGeo = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
   /** Lights the player's hull while the cannon charges. Always present, so the light count never changes. */
   private chargeLight = new THREE.PointLight(0xffb060, 0, 180, 2);
+  private lampLights!: LampLights;
+  private lampK: number[] = [];
   private wasFull = false;
   private frameDt = 0;
   private ghosts: THREE.Mesh[] = [];
@@ -169,7 +172,7 @@ export class MissionView3D {
     this.moonOffset = new THREE.Vector3(-520, 950, -650);
     this.moon.castShadow = true;
     const low = d.settings.lowEffects;
-    this.moon.shadow.mapSize.set(low ? 2048 : 4096, low ? 2048 : 4096);
+    this.moon.shadow.mapSize.setScalar(low ? 1024 : 2048);
     this.moon.shadow.bias = -0.0003;
     this.moon.shadow.normalBias = 1.2;
     this.moon.shadow.radius = 3;
@@ -183,6 +186,8 @@ export class MissionView3D {
       scene.add(c);
       this.lampCones.push(c);
     }
+    this.lampLights = new LampLights(scene, this.world.lamps, low);
+    procUniforms.uProcOn.value = low ? 0 : 1;
     this.mist = new Mist(scene, this.world.lamps.map((l) => ({ x: l.x, y: l.z })), this.world.width, this.world.height);
     this.rain = new Rain(scene);
     this.decals = new Decals(scene);
@@ -194,6 +199,7 @@ export class MissionView3D {
       flash: (x, z, scale) => this.flashes.add(x, z, 'explosion', scale),
       sparks: (x, y, z, n, speed) => this.sparks.burst(x, y, z, 0, 0, n, speed),
       boom: (x, z, size, main) => {
+        this.lampLights.blast(x, z);
         const vol = Math.max(0.2, this.vol(x, z, 1500));
         if (main) this.d.audio.explosion(this.pan(x), vol);
         else this.d.audio.cookOff(size, this.pan(x), vol);
@@ -333,7 +339,9 @@ export class MissionView3D {
 
   private resize(): void {
     const w = this.container.clientWidth || innerWidth, h = this.container.clientHeight || innerHeight;
-    const dpr = Math.min(devicePixelRatio, this.d.settings.lowEffects ? 1 : 2);
+    // Retina screens report 2: at full DPR every effect pass runs on 4x the pixels for a sharpness
+    // that the film grain and bloom mostly hide. High stops at 1.5, Low renders at CSS pixels.
+    const dpr = Math.min(devicePixelRatio, this.d.settings.lowEffects ? 1 : 1.5);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h);
     this.composer.setPixelRatio(dpr);
@@ -400,6 +408,23 @@ export class MissionView3D {
     this.camera.updateMatrixWorld();
   }
 
+  /** The view's footprint on the ground: centre and half extents across / along the view direction. */
+  private viewFootprint(): { x: number; z: number; halfW: number; halfD: number } {
+    const halfH = (this.camera.top - this.camera.bottom) / 2;
+    // the ground is seen at the camera pitch, so screen height stretches by 1/sin(pitch) = √3
+    return { x: this.camTarget.x, z: this.camTarget.z, halfW: (this.camera.right - this.camera.left) / 2, halfD: halfH * Math.sqrt(3) };
+  }
+
+  /** Things that move and cast shadows into the lamp lights this frame: visible tanks and settling wrecks. */
+  private movers(): { x: number; z: number }[] {
+    const out: { x: number; z: number }[] = [];
+    for (const v of this.tanks.values()) {
+      const r = v.model.root;
+      if (r.visible && (!v.dead || v.deadT < 6)) out.push({ x: r.position.x, z: r.position.z });
+    }
+    return out;
+  }
+
   /** Fit the moon's shadow map to the view and snap it to whole texels in light space (no shimmering). */
   private placeMoon(): void {
     const R = Math.max(this.camera.right - this.camera.left, (this.camera.top - this.camera.bottom) * 1.8) * 0.5 + 160;
@@ -459,6 +484,14 @@ export class MissionView3D {
     const low = this.d.settings.lowEffects;
     this.gtao.enabled = !low;
     this.smaa.enabled = !low;
+    procUniforms.uProcOn.value = low ? 0 : 1;
+    this.lampLights.setLow(low);
+    const moonSize = low ? 1024 : 2048;
+    if (this.moon.shadow.mapSize.x !== moonSize) {
+      this.moon.shadow.mapSize.setScalar(moonSize);
+      this.moon.shadow.map?.dispose();
+      this.moon.shadow.map = null;
+    }
     this.resize();
   }
 
@@ -546,12 +579,13 @@ export class MissionView3D {
     this.lampFlick += (1 - this.lampFlick) * dt * 3;
     this.world.lamps.forEach((l, i) => {
       const k = (0.96 + Math.sin(t * 1.1 + i) * 0.03) * (i === 2 ? this.lampFlick : 1);
-      l.light.intensity = 320000 * k;
+      this.lampK[i] = k;
       l.glow.material.opacity = k;
       l.bulb.color.setRGB(8 * k, 4.4 * k, 1.6 * k);
       (this.lampCones[i]!.material as THREE.ShaderMaterial).uniforms.uStrength!.value = 0.16 * k;
       (this.lampCones[i]!.material as THREE.ShaderMaterial).uniforms.uTime!.value = t;
     });
+    this.lampLights.update(this.viewFootprint(), this.lampK, this.movers(), dt);
     for (const m of this.beamMats) m.uniforms.uTime!.value = t;
     procUniforms.uTime.value = t;
     this.mist.update(t);

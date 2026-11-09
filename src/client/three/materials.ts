@@ -36,6 +36,14 @@ float vnoise(vec3 x) {
   return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
              mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
+// Bump mapping from screen-space derivatives (Mikkelsen 2010), as three's bumpmap does.
+vec3 procBump(vec3 n, float h, float faceDir) {
+  vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+  vec3 r1 = cross(sy, n), r2 = cross(n, sx);
+  float det = dot(sx, r1) * faceDir;
+  vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+  return normalize(abs(det) * n - grad);
+}
 float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.07 + 7.3; a *= 0.5; } return s; }
 `;
 
@@ -47,6 +55,8 @@ export function proc<T extends THREE.MeshStandardMaterial>(mat: T, surface: Surf
   const scale = (opts.scale ?? 0.08).toFixed(4);
   const bump = (opts.bump ?? 0.6).toFixed(3);
   const wearK = (opts.wear ?? 1).toFixed(3);
+  // height of the micro bump in world units, matching the old finite-difference strength
+  const bumpK = (((opts.bump ?? 0.6) * 6 * 0.15) / ((opts.scale ?? 0.08) * 4.3)).toFixed(4);
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uProcOn = procUniforms.uProcOn;
     sh.uniforms.uTime = procUniforms.uTime;
@@ -72,16 +82,17 @@ export function proc<T extends THREE.MeshStandardMaterial>(mat: T, surface: Surf
         vec3 P = vWPos * ${scale};
         vec3 an = abs(normalize(vONrm));
         float edge = smoothstep(0.04, 0.22, 1.0 - max(an.x, max(an.y, an.z)));
-        float n1 = fbm(P);
-        float n2 = fbm(P * 4.3 + 11.0);
+        float n1 = 0.5, n2 = 0.5;
         float wear = 0.0, grime = 0.0, wet = 0.0, rust = 0.0;
         if (uProcOn > 0.5) {
+          n1 = fbm(P);
+          n2 = fbm(P * 4.3 + 11.0);
           grime = (1.0 - smoothstep(0.0, 26.0, vWPos.y)) * smoothstep(0.3, 0.7, n1);
           wear = edge * smoothstep(0.35, 0.6, n2) * ${wearK};
           vec3 c = diffuseColor.rgb;
           #if ${surface} == 0
             c *= 0.8 + 0.35 * n1;
-            c *= 1.0 - 0.25 * step(0.78, fbm(P * 9.0));                        // pores
+            c *= 1.0 - 0.25 * step(0.86, vnoise(P * 9.0));                     // pores
             float streak = (1.0 - an.y) * smoothstep(0.55, 0.8, fbm(vec3(vWPos.x * 0.25, vWPos.y * 0.012, vWPos.z * 0.25)));
             c *= 1.0 - 0.35 * streak;                                             // rain streaks
             c = mix(c, c * 1.25 + 0.04, wear);                                    // chipped edges show fresh concrete
@@ -131,14 +142,9 @@ export function proc<T extends THREE.MeshStandardMaterial>(mat: T, surface: Surf
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
         if (uProcOn > 0.5) {
-          // Micro bump from the noise gradient (finite differences in world space), moved to view space.
-          float e = 0.15 / (${scale} * 4.3);
-          vec3 g = vec3(fbm((vWPos + vec3(e,0,0)) * ${scale} * 4.3 + 11.0) - n2,
-                        fbm((vWPos + vec3(0,e,0)) * ${scale} * 4.3 + 11.0) - n2,
-                        fbm((vWPos + vec3(0,0,e)) * ${scale} * 4.3 + 11.0) - n2);
-          vec3 gv = mat3(viewMatrix) * g;
-          gv -= dot(gv, normal) * normal;
-          normal = normalize(normal - gv * ${bump} * 6.0 * (1.0 - wet));
+          // Micro bump: n2 read as a height field, its slope taken from screen-space derivatives
+          // (one noise evaluation instead of three more for finite differences).
+          normal = procBump(normal, n2 * ${bumpK} * (1.0 - wet), faceDirection);
           normal = normalize(mix(normal, nonPerturbedNormal, wet));   // standing water is flat
         }`,
       );

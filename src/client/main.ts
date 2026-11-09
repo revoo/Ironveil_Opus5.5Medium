@@ -207,7 +207,7 @@ function settingsScreen(back: () => void): void {
       <div class="row"><label>Music</label><input type="range" min="0" max="1" step="0.05" id="music" value="${settings.music}"></div>
       <div class="row"><label>Text size</label>${seg('text', [['0.85', 'Small'], ['1', 'Normal'], ['1.2', 'Large'], ['1.4', 'Huge']], String(settings.textScale))}</div>
       <div class="row"><label>Reduced motion</label>${seg('rm', [['0', 'Off'], ['1', 'On']], settings.reducedMotion ? '1' : '0')} <span class="muted small">no camera shake/kick, calmer smoke</span></div>
-      <div class="row"><label>Effects quality</label>${seg('fx', [['0', 'High'], ['1', 'Low']], settings.lowEffects ? '1' : '0')} <span class="muted small">fewer particles & lights; never changes visibility</span></div>
+      <div class="row"><label>Effects quality</label>${seg('fx', [['0', 'High'], ['1', 'Low']], settings.lowEffects ? '1' : '0')} <span class="muted small">lower resolution, plainer surfaces, cheaper shadows; never changes what you can see</span></div>
       <div class="row"><label>Squad radio</label>${seg('radio', [['1', 'Shown'], ['0', 'Hidden']], settings.showRadio ? '1' : '0')}</div>
       <h2 style="margin-top:18px">Controls</h2>
       <div class="grid">${actions

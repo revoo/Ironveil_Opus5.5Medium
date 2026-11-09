@@ -6,8 +6,7 @@ import { Terrain, tileAt } from '../../sim/map';
 import type { Level } from '../../level/load';
 import { procUniforms } from './materials';
 import { dressBooth, dressBuilding } from './signs';
-import { barrel, barrier, building, bushGeometries, lamp, makeMaterials, mergeStatic, rand, railcar, wallRun, windowsMesh, type LampView, type WindowInstance } from './models';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { barrel, barrier, building, bushGeometries, ChunkMerger, lamp, makeMaterials, mergeStatic, rand, railcar, wallRun, windowsMesh, type LampView, type WindowInstance } from './models';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 export interface BuiltWorld {
@@ -123,12 +122,12 @@ function groundMaterial(level: Level): THREE.MeshStandardMaterial {
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
         if (uProcOn > 0.5) {
-          float e = 0.6;
-          float h0 = groundHeight(P, W);
-          vec3 g = vec3(groundHeight(P + vec2(e, 0.0), W) - h0, 0.0, groundHeight(P + vec2(0.0, e), W) - h0) / e;
-          vec3 gv = mat3(viewMatrix) * g;
-          gv -= dot(gv, normal) * normal;
-          normal = normalize(normal - gv * 1.3 * (1.0 - puddle));
+          // cobbles and turf as a height field; slope from screen-space derivatives (Mikkelsen)
+          float h = groundHeight(P, W) * 1.3 * (1.0 - puddle);
+          vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+          vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
+          float det = dot(sx, r1) * faceDirection;
+          normal = normalize(abs(det) * normal - sign(det) * (dFdx(h) * r1 + dFdy(h) * r2));
         }`,
       );
   };
@@ -234,25 +233,19 @@ export function buildWorld(scene: THREE.Scene, level: Level): BuiltWorld {
   for (let rr = 0; rr < map.rows; rr++)
     for (let c = 0; c < map.cols; c++)
       if (tileAt(map, c, rr) === Terrain.Brush) bushGeometries((c + 0.5) * T, (rr + 0.5) * T, T, rr * 1000 + c).forEach((g, i) => ((i + c + rr) % 2 ? bushA : bushB).push(g));
-  for (const [list, mat] of [
-    [bushA, m.bush],
-    [bushB, m.bush2],
-  ] as const) {
-    if (!list.length) continue;
-    const mesh = new THREE.Mesh(mergeGeometries(list.map((g) => (g.index ? g.toNonIndexed() : g)), false)!, mat);
-    mesh.castShadow = mesh.receiveShadow = true;
-    scene.add(mesh);
-  }
+  const bushes = new ChunkMerger();
+  bushA.forEach((g) => bushes.add(g, m.bush));
+  bushB.forEach((g) => bushes.add(g, m.bush2));
+  bushes.flush(scene);
 
   // ---- props from the level
   const lamps: LampView[] = [];
-  let lampN = 0;
   level.data.props.forEach((p, i) => {
     const cx = p.x + p.w / 2, cz = p.y + p.h / 2;
     const rot = ((p.rotation ?? 0) * Math.PI) / 180;
     switch (p.kind.toLowerCase()) {
       case 'lamp':
-        lamps.push(lamp(staticRoot, scene, m, cx, cz, lampN++ < 6, rot));
+        lamps.push(lamp(staticRoot, m, cx, cz, rot));
         break;
       case 'barrel':
         barrel(staticRoot, m, cx, cz, i * 31);

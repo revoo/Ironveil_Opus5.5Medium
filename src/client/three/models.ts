@@ -219,14 +219,14 @@ export function windowsMesh(wins: WindowInstance[], mat: THREE.Material): THREE.
 // ---------------------------------------------------------------- lamps
 export const LAMP_HEIGHT = 120;
 export interface LampView {
-  light: THREE.SpotLight;
   glow: THREE.Sprite;
   bulb: THREE.MeshBasicMaterial;
   x: number;
   z: number;
 }
 
-export function lamp(parent: THREE.Object3D, scene: THREE.Scene, m: Materials, x: number, z: number, castShadow: boolean, armDir = 0): LampView {
+/** A lamp post. Its light comes from the shared pool in `lamps.ts`. */
+export function lamp(parent: THREE.Object3D, m: Materials, x: number, z: number, armDir = 0): LampView {
   const g = new THREE.Group();
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(2, 3.2, LAMP_HEIGHT + 6, 10), m.pole);
   pole.position.set(-18, (LAMP_HEIGHT + 6) / 2, 0);
@@ -249,16 +249,7 @@ export function lamp(parent: THREE.Object3D, scene: THREE.Scene, m: Materials, x
   g.position.set(x, 0, z);
   g.rotation.y = armDir;
   parent.add(g);
-  const s = new THREE.SpotLight(0xffa64d, 320000, 700, 1.1, 0.8, 2);
-  s.position.set(x, LAMP_HEIGHT - 3, z);
-  s.target.position.set(x, 0, z);
-  s.castShadow = castShadow;
-  s.shadow.mapSize.set(1024, 1024);
-  s.shadow.bias = -0.0006;
-  s.shadow.normalBias = 0.6;
-  s.shadow.camera.near = 8;
-  scene.add(s, s.target);
-  return { light: s, glow, bulb: bulbMat, x, z };
+  return { glow, bulb: bulbMat, x, z };
 }
 
 // ---------------------------------------------------------------- set dressing
@@ -501,7 +492,7 @@ export function buildTank(scene: THREE.Scene, team: 0 | 1, beamMat: THREE.Materi
  */
 export function mergeStatic(root: THREE.Object3D, scene: THREE.Scene): void {
   root.updateMatrixWorld(true);
-  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  const groups = new ChunkMerger();
   const keep: THREE.Object3D[] = [];
   root.traverse((o) => {
     if (o === root) return;
@@ -512,18 +503,43 @@ export function mergeStatic(root: THREE.Object3D, scene: THREE.Scene): void {
       for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
       if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position!.count * 2), 2));
       g.morphAttributes = {};
-      const list = byMat.get(m.material) ?? [];
-      list.push(g);
-      byMat.set(m.material, list);
+      groups.add(g, m.material);
     } else if (o.type !== 'Group' && !(o.parent && o.parent !== root && keep.includes(o.parent))) keep.push(o);
   });
   for (const o of keep) scene.attach(o);
-  for (const [mat, geos] of byMat) {
-    const merged = mergeGeometries(geos, false);
-    if (!merged) continue;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.castShadow = mesh.receiveShadow = true;
-    scene.add(mesh);
-    geos.forEach((g) => g.dispose());
+  groups.flush(scene);
+}
+
+/**
+ * Merges static geometry per material *and per map tile*. One draw per material for the whole
+ * map would be fewest calls, but then every mesh spans the map and nothing can be culled: each
+ * shadow-casting light re-drew the entire city. Tiles let the camera and each light's shadow
+ * camera skip what they can't see, for a few more (cheap) draw calls.
+ */
+export class ChunkMerger {
+  static readonly TILE = 768;
+  private byKey = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
+  private box = new THREE.Box3();
+  private c = new THREE.Vector3();
+  add(g: THREE.BufferGeometry, mat: THREE.Material): void {
+    if (g.index) g = g.toNonIndexed();
+    this.box.setFromBufferAttribute(g.attributes.position as THREE.BufferAttribute).getCenter(this.c);
+    const key = `${mat.uuid}:${Math.floor(this.c.x / ChunkMerger.TILE)}:${Math.floor(this.c.z / ChunkMerger.TILE)}`;
+    const e = this.byKey.get(key) ?? { mat, geos: [] };
+    e.geos.push(g);
+    this.byKey.set(key, e);
+  }
+  flush(scene: THREE.Object3D): void {
+    for (const { mat, geos } of this.byKey.values()) {
+      const merged = mergeGeometries(geos, false);
+      geos.forEach((g) => g.dispose());
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
+      scene.add(mesh);
+    }
+    this.byKey.clear();
   }
 }
