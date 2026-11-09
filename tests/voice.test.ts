@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planUtterance, revealAt, mouthAt, levelAt, voiceFor, babble, CREW_VOICES } from '../src/client/sound/voice';
+import { planUtterance, revealAt, mouthAt, levelAt, voiceFor, babble, speakAs, CREW_VOICES } from '../src/client/sound/voice';
 import { portraitSvg, speaker } from '../src/client/three/portraits';
 
 const line = 'Contact front! Two tanks at the bridge, moving east.';
@@ -39,12 +39,47 @@ describe('radio voice planning', () => {
     expect(voiceFor('Hauptmann Weiss (enemy)')).toEqual(voiceFor('Hauptmann Weiss'));
   });
 
-  it('raises the pitch at the end of a question', () => {
-    const v = voiceFor('Loader');
+  it('Germanic questions rise at the end', () => {
+    const v = voiceFor('Gate North', 'germanic');
     const q = planUtterance('Are we clear to move', v);
     const qq = planUtterance('Are we clear to move?', v);
     const lastVoiced = (u: typeof q) => [...u.segs].reverse().find((s) => s.v > 0.5)!.p;
     expect(lastVoiced(qq)).toBeGreaterThan(lastVoiced(q) * 1.1);
+  });
+
+  it('Slavic questions jump up on the key word and fall after it; statements fall', () => {
+    const v = voiceFor('Loader');
+    expect(v.accent).toBe('slavic');
+    const peak = (u: ReturnType<typeof planUtterance>) => Math.max(...u.segs.filter((s) => s.v > 0.5).map((s) => s.p));
+    const q = planUtterance('Did you see the gate?', v);
+    const st = planUtterance('Did you see the gate.', v);
+    expect(peak(q)).toBeGreaterThan(peak(st) * 1.15);
+    const voiced = q.segs.filter((s) => s.v > 0.5);
+    const top = voiced.findIndex((s) => s.p === peak(q));
+    if (top < voiced.length - 1) expect(voiced[voiced.length - 1]!.p).toBeLessThan(peak(q) * 0.85);
+    const sv = st.segs.filter((s) => s.v > 0.5);
+    expect(sv[sv.length - 1]!.p).toBeLessThan(v.pitch);
+  });
+
+  it('respeaks each word in the speaker language, the same word always the same', () => {
+    const a = speakAs('Contact at the gate, the gate!', 'slavic');
+    expect(a.s).not.toContain('gate');
+    const g = speakAs('gate', 'slavic').s;
+    expect(a.s.split(g).length - 1).toBe(2);
+    expect(speakAs('gate', 'germanic').s).not.toBe(g);
+    for (const acc of ['slavic', 'germanic'] as const) {
+      const t = 'Hold here. Two tanks, moving east!';
+      const m = speakAs(t, acc).map;
+      for (let i = 1; i < m.length; i++) expect(m[i]!).toBeGreaterThanOrEqual(m[i - 1]!);
+      expect(m[m.length - 1]).toBe(t.length);
+    }
+  });
+
+  it('rolls the Slavic r and catches German word-initial vowels', () => {
+    const sl = planUtterance('Driver, right turn, rear arc.', voiceFor('Driver'));
+    expect(sl.segs.some((s) => s.trill)).toBe(true);
+    const de = planUtterance('Right turn, rear arc.', voiceFor('Gate North', 'germanic'));
+    expect(de.segs.some((s) => s.trill)).toBe(false);
   });
 
   it('keeps mouth and level in 0..1 and silent after the line', () => {
@@ -75,6 +110,7 @@ describe('comms portraits', () => {
       expect(speaker(who, false).tag.length).toBeGreaterThan(1);
     }
     expect(portraitSvg('Hauptmann', true)).toContain('class="head"');
-    expect(speaker('Hauptmann', true).tag).toBe('FEIND');
+    expect(speaker('Hauptmann', true).tag).toBe('ВРАГ');
+    expect(portraitSvg('Commander', false)).toContain('<path d="M');
   });
 });

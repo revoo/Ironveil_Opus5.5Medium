@@ -3,7 +3,7 @@
   "title": "The Long Night",
   "summary": "The long playtest level: eleven stretches across the whole city, about 5-10 minutes. A convoy, a river with three crossings, an optional target, and a crew decision before the fortress.",
   "level": "long-night",
-  "briefing": "Cross the city to the fortress at the far end and get out through its west yard. Old town, the boulevard, the factory, the river, the rail yard, the border checkpoint, then the fortress itself. Every stretch has a way around its guards, and the crew patches the tank at each checkpoint. A signal truck at the factory can call reinforcements to the fortress if they know you're coming. Taking it out is optional.",
+  "briefing": "Vostravan armour has no business inside the Directorate's wall, and its border troops know it. Cross the city to the fortress at the far end and get out through its west yard. Old town, the boulevard, the factory, the river, the rail yard, the border checkpoint, then the fortress itself. Every stretch has a way around its guards, and the crew patches the tank at each checkpoint. A signal truck at the factory can call reinforcements to the fortress if they know you're coming. Taking it out is optional.",
   "playerName": "Ironveil",
   "alarmRadius": 520,
   "units": [

@@ -209,7 +209,7 @@ export class Hud3D {
       this.root.classList.toggle('choosing', !!c);
       if (c)
         choice.innerHTML = `<div class="timer"><i></i></div>
-          <div class="who"><b>Befehl</b>${esc(c.from ?? 'Crew')} · Decision</div>
+          <div class="who"><b>Приказ</b>${esc(c.from ?? 'Crew')} · Decision</div>
           <div class="prompt">${esc(c.prompt)}</div>
           ${c.options.map((o, i) => `<div class="opt${i === c.defaultIndex ? ' def' : ''}"><kbd>${i + 1}</kbd><span>${esc(o)}</span></div>`).join('')}`;
     }

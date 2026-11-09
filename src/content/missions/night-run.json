@@ -3,7 +3,7 @@
   "title": "Demo: Night Run",
   "summary": "A long, winding run across the district: rail yard, market, canal, depot. Small patrols, a checkpoint and field repairs between each.",
   "level": "night-run",
-  "briefing": "Cross the district to the rail depot at the far end of the south quarter. The route snakes through the rail yard, the market square, over the canal and down the depot road. Each stretch has only a few guards and a way around them; between stretches the crew can patch the tank and you get a checkpoint. Fight if you must, but every shot is heard.",
+  "briefing": "One Vostravan tank, deep behind the Directorate's wall. Cross the district to the rail depot at the far end of the south quarter. The route snakes through the rail yard, the market square, over the canal and down the depot road. Each stretch has only a few guards and a way around them; between stretches the crew can patch the tank and you get a checkpoint. Fight if you must, but every shot is heard.",
   "playerName": "Ironveil",
   "alarmRadius": 560,
   "units": [

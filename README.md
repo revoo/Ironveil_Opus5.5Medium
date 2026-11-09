@@ -1,6 +1,7 @@
 # Ironveil
 
-A top-down stealth tank game in the browser: a tank crew, a divided city, a long night. The main
+A top-down stealth tank game in the browser: a Vostravan tank crew behind the Directorate's wall,
+a divided city, a long night (both nations fictional, see [docs/SETTING.md](docs/SETTING.md)). The main
 mode is a **mission campaign** rendered in 3D (isometric Three.js): sneak or fight through
 checkpoint districts while your crew talks you through it, and make real-time decisions they will
 remember. The original **team deathmatch** against a tactical AI squad remains as a 2D
@@ -56,11 +57,11 @@ npm run build && npm run preview     # production build on http://localhost:4173
 - **Combat feedback**: armour hits glow and throw spall, damaged tanks smoke and then burn, enemy
   health bars and a cursor hit marker. A kill is a fireball with a shockwave and debris, the turret
   blown off, two to five ammunition cook-offs, and a wreck that burns for half a minute.
-- **Comms panel**: crew radio as a Cold-War Berlin dialogue box at the bottom centre, with a
+- **Comms panel**: crew radio as an Eastern-Bloc dialogue box with Cyrillic labels at the bottom centre, with a
   halftone portrait per crew member whose mouth moves with the voice, the line typed out as it is
-  spoken, a level meter, a queue, and intercepted enemy traffic stamped *Abgehört*.
+  spoken, a level meter, a queue, and intercepted enemy traffic stamped *Перехват*.
 - **Audio**, all synthesised: an adaptive score that follows detection, indistinct speech-shaped
-  radio voices (one per crew member) with press-to-talk, squelch and engine bleed, faint traffic
+  radio voices with accents (a Slavic crew, a Germanic enemy) with press-to-talk, squelch and engine bleed, faint traffic
   from other units on the net, night-city ambience, urban reverb.
 
 ## Project layout

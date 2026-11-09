@@ -1,5 +1,6 @@
 // The comms panel: crew radio as a dialogue box at the bottom centre of the 3D view, in a heavy
-// Cold-War Berlin style (concrete, stencil, signal red, halftone portraits).
+// Eastern-Bloc style (concrete, constructivist stencil, signal red, halftone portraits). Labels are
+// in our crew's Cyrillic; the subtitles stay English.
 //
 // It owns the radio queue. Lines play one at a time; each is planned once (`planUtterance`), the
 // sound is started through `onAir`, and the panel follows the same plan: the subtitle is revealed
@@ -8,6 +9,9 @@
 // receiver strip whose lamp flickers when other units are talking on the net.
 import { levelAt, mouthAt, planUtterance, revealAt, voiceFor, type Utterance, type VoiceProfile } from '../sound/voice';
 import { portraitSvg, speaker } from './portraits';
+import { LORE } from '../../content/lore';
+
+const NET = LORE.us.radioSet;
 
 export interface CommsLine {
   from: string;
@@ -79,16 +83,16 @@ export class Comms {
     this.el.innerHTML = `
       <div class="cm-log"></div>
       <div class="cm-box">
-        <div class="cm-face"><div class="cm-pt"></div><i class="cm-grain"></i><i class="cm-scan"></i><b class="cm-stamp">Abgehört</b>
+        <div class="cm-face"><div class="cm-pt"></div><i class="cm-grain"></i><i class="cm-scan"></i><b class="cm-stamp">Перехват</b>
           <i class="cm-reg a"></i><i class="cm-reg b"></i></div>
         <div class="cm-body">
           <header><b class="cm-tag"></b><span class="cm-who"><span class="cm-name"></span><small class="cm-role"></small></span>
-            <span class="cm-net">Funk&nbsp;K-04 · 41.250</span><span class="cm-vu"><i></i></span></header>
+            <span class="cm-net"></span><span class="cm-vu"><i></i></span></header>
           <p class="cm-text"><span class="said"></span><i class="caret"></i><span class="rest"></span></p>
-          <footer><span class="cm-air"><i></i>Sendung <em>0:00</em></span><span class="cm-next"></span></footer>
+          <footer><span class="cm-air"><i></i>Передача <em>0:00</em></span><span class="cm-next"></span></footer>
         </div>
       </div>
-      <div class="cm-idle"><i class="lamp"></i><span>Funk K-04</span><b>Empfang</b></div>`;
+      <div class="cm-idle"><i class="lamp"></i><span>${NET} · кан 4</span><b></b></div>`;
     const url = grainUrl();
     if (url) this.el.style.setProperty('--grain', `url(${url})`);
     host.appendChild(this.el);
@@ -149,7 +153,7 @@ export class Comms {
   private start(line: CommsLine): void {
     // a busy channel talks faster
     const speed = this.queue.length >= 3 ? 1.45 : this.queue.length >= 1 ? 1.2 : 1;
-    const voice = voiceFor(line.from);
+    const voice = voiceFor(line.from, line.enemy ? 'germanic' : 'slavic');
     const u = planUtterance(line.text, voice, speed);
     this.live = { line, u, t: 0 };
     const who = speaker(line.from, line.enemy);
@@ -165,7 +169,7 @@ export class Comms {
     this.q('.cm-tag').textContent = who.tag;
     this.q('.cm-name').textContent = who.name;
     this.q('.cm-role').textContent = who.role;
-    this.q('.cm-net').textContent = line.enemy ? 'Fremd · 38.900' : 'Funk K-04 · 41.250';
+    this.q('.cm-net').textContent = line.enemy ? 'чужая волна · 38.900' : `${NET} · кан 4 · 41.250`;
     this.q('.cm-text .said').textContent = '';
     this.q('.cm-text .rest').textContent = line.text;
     this.shown = 0;
@@ -241,6 +245,6 @@ export class Comms {
 
   private renderNext(): void {
     const n = this.queue.length;
-    this.q('.cm-next').innerHTML = n ? `<b>▼</b> ${n} wartet` : '';
+    this.q('.cm-next').innerHTML = n ? `<b>▼</b> ${n} в очереди` : '';
   }
 }

@@ -213,7 +213,7 @@ export class Radio {
   /** Distant traffic between other units on the net: faint, broken, never understood. */
   netChatter(): number {
     const c = this.ctx;
-    const voice = voiceFor('net' + Math.floor(Math.random() * 9));
+    const voice = voiceFor('net' + Math.floor(Math.random() * 9), 'slavic');
     const u = planUtterance(babble(), voice, 1.15);
     const t0 = c.currentTime + 0.03;
     const pan = c.createStereoPanner();

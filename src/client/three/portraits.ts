@@ -4,6 +4,8 @@
 // urgent lines), `.eyes` (blink), and three mouth shapes `.m0` closed, `.m1` half open, `.m2` open.
 // The comms panel picks the mouth from the voice plan, so lips move with the synthesised speech.
 
+import { LORE } from '../../content/lore';
+
 const INK = '#151513';
 const PAPER = '#e4d9c1';
 const RED = '#c3261b';
@@ -19,16 +21,38 @@ export interface Speaker {
   role: string;
 }
 
+// Tags and roles are in our crew's language (Cyrillic); names stay English so subtitles read.
 const SPEAKERS: Record<string, Speaker> = {
-  Commander: { tag: 'KDT', name: 'Commander', role: 'Kommandant' },
-  Driver: { tag: 'FHR', name: 'Driver', role: 'Fahrer' },
-  Gunner: { tag: 'RS', name: 'Gunner', role: 'Richtschütze' },
-  Loader: { tag: 'LS', name: 'Loader', role: 'Ladeschütze' },
+  Commander: { tag: 'КОМ', name: 'Commander', role: 'командир' },
+  Driver: { tag: 'МВ', name: 'Driver', role: 'механик-водитель' },
+  Gunner: { tag: 'НАВ', name: 'Gunner', role: 'наводчик' },
+  Loader: { tag: 'ЗАР', name: 'Loader', role: 'заряжающий' },
 };
 
 export function speaker(from: string, enemy: boolean): Speaker {
-  if (enemy) return { tag: 'FEIND', name: from.replace(/\s*\(enemy\)$/, ''), role: 'Feindfunk' };
-  return SPEAKERS[from] ?? { tag: from.slice(0, 3).toUpperCase(), name: from, role: 'Funknetz' };
+  if (enemy) return { tag: 'ВРАГ', name: from.replace(/\s*\(enemy\)$/, ''), role: LORE.them.native };
+  return SPEAKERS[from] ?? { tag: from.slice(0, 3).toUpperCase(), name: from, role: 'радиосеть' };
+}
+
+/** A five-pointed star (our side's mark), centred at (cx, cy). */
+function star(cx: number, cy: number, r: number, fill = RED): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 ? r * 0.4 : r;
+    pts.push(`${(cx + Math.cos(a) * rr).toFixed(2)},${(cy + Math.sin(a) * rr).toFixed(2)}`);
+  }
+  return `<path d="M${pts.join('L')}Z" fill="${fill}"/>`;
+}
+
+/** The Vostravan badge: a red star inside a cog ring. */
+function badge(cx: number, cy: number, r: number): string {
+  let teeth = '';
+  for (let i = 0; i < 10; i++) {
+    const a = (i * Math.PI) / 5;
+    teeth += `<rect x="${(cx - 1).toFixed(2)}" y="${(cy - r - 1.6).toFixed(2)}" width="2" height="2.4" fill="${PAPER}" transform="rotate(${(a * 180) / Math.PI} ${cx} ${cy})"/>`;
+  }
+  return `<g>${teeth}<circle cx="${cx}" cy="${cy}" r="${r}" fill="${PAPER}"/><circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="${INK}"/>${star(cx, cy + 0.3, r - 1.6)}</g>`;
 }
 
 const defs = (id: string) =>
@@ -38,7 +62,8 @@ const defs = (id: string) =>
 const shoulders = (fill = GEAR) =>
   `<path d="M4 140 C8 116 30 105 60 103 C90 105 112 116 116 140Z" fill="${fill}"/>` +
   `<path d="M42 104 L60 122 L78 104 L71 100 L60 112 L49 100Z" fill="#2c2c28"/>` +
-  `<path d="M30 114 l13 -4 l3 9 l-13 4z" fill="${RED}"/><path d="M90 114 l-13 -4 l-3 9 l13 4z" fill="${RED}"/>`;
+  `<path d="M30 114 l13 -4 l3 9 l-13 4z" fill="${RED}"/><path d="M90 114 l-13 -4 l-3 9 l13 4z" fill="${RED}"/>` +
+  star(38.5, 115.5, 2.6, PAPER) + star(81.5, 115.5, 2.6, PAPER);
 
 const neck = (id: string, w = 11) =>
   `<path d="M${60 - w} 82 L${60 + w} 82 L${62 + w} 104 L60 111 L${58 - w} 104Z" fill="${PAPER}" stroke="${INK}" stroke-width="1.2"/>` +
@@ -89,6 +114,7 @@ function commander(): string {
       mouths(78) +
       `<path d="M50 72.5 Q55 69.5 60 71.5 Q65 69.5 70 72.5 L69 75.5 Q64 73.5 60 75 Q56 73.5 51 75.5Z" fill="${INK}"/>` +
       tankHelmet() +
+      badge(60, 23.5, 5.4) +
       `</g>`,
   );
 }
@@ -176,16 +202,25 @@ function loader(): string {
   );
 }
 
+/** Intercepted Directorate traffic: a peaked-cap border officer in slate and ochre, faceless. */
 function intercept(): string {
   const id = 'feind';
+  const SLATE = '#4c5358';
+  const OCHRE = '#c89b37';
   return svg(
     id,
-    `<rect width="120" height="140" fill="${RED}"/><rect width="120" height="140" fill="url(#hl-${id})" opacity=".25"/>` +
+    `<rect width="120" height="140" fill="${SLATE}"/><path d="M0 92 L120 40 L120 60 L0 112Z" fill="${OCHRE}" opacity=".85"/>` +
+      `<rect width="120" height="140" fill="url(#hl-${id})" opacity=".18"/>` +
       `<path d="M10 140 C14 114 34 104 60 102 C86 104 106 114 110 140Z" fill="${INK}"/>` +
-      `<g class="head"><path d="M40 70 Q38 32 60 30 Q82 32 80 70 Q78 89 60 93 Q42 89 40 70Z" fill="${INK}"/>` +
-      `<path d="M32 58 Q33 20 60 18 Q87 20 88 58 L81 55 Q79 31 60 30 Q41 31 39 55Z" fill="${INK}"/>` +
-      `<path d="M47 55 h10 M63 55 h10" stroke="${RED}" stroke-width="2.2" opacity=".75"/></g>` +
-      `<g stroke="${PAPER}" stroke-width="1.2" fill="none" opacity=".8"><circle cx="60" cy="60" r="27"/><path d="M60 26 v12 M60 82 v12 M26 60 h12 M82 60 h12"/></g>`,
+      `<path d="M22 118 l18 -6 l2 6 l-18 6z M98 118 l-18 -6 l-2 6 l18 6z" fill="${OCHRE}"/>` +
+      `<g class="head"><path d="M42 70 Q40 46 60 45 Q80 46 78 70 Q76 89 60 93 Q44 89 42 70Z" fill="${INK}"/>` +
+      // peaked cap: tall crown, band, visor
+      `<path d="M28 44 Q30 22 60 20 Q90 22 92 44 L82 50 L38 50Z" fill="${INK}"/>` +
+      `<path d="M37 50 H83 V56 H37Z" fill="#2a2e31"/><path d="M36 56 H84 L77 64 Q60 67 43 64Z" fill="${INK}"/>` +
+      // the Directorate's mark: a gate tower
+      `<path d="M55 43 V33 h2 v2 h2 v-2 h2 v2 h2 v-2 h2 V43 h-3.5 v-4 h-3 v4Z" fill="${OCHRE}"/>` +
+      `<path d="M48 73 h9 M63 73 h9" stroke="${OCHRE}" stroke-width="2" opacity=".7"/></g>` +
+      `<g stroke="${PAPER}" stroke-width="1.2" fill="none" opacity=".75"><circle cx="60" cy="62" r="28"/><path d="M60 27 v12 M60 85 v12 M25 62 h12 M83 62 h12"/></g>`,
   );
 }
 
