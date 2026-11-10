@@ -1,11 +1,15 @@
 # Handoff
 
 For the next agent session picking up Ironveil. Read `CLAUDE.md` first (commands, map of the code,
-invariants, gotchas), then this page. Last updated: 2026-11-09.
+invariants, gotchas), then this page. Last updated: 2026-11-10.
 
 ## Where things stand
 
-`main` holds everything. The most recent work, all merged by fast-forward:
+`main` holds everything up to the render-budget pass. **`perf/audit-pass` is pushed but not merged**:
+a performance audit and a second optimisation pass (D34–D37, [PERF-AUDIT.md](PERF-AUDIT.md)). The
+preview artifact runs that branch. It waits for the owner to playtest it and say "merge".
+
+The most recent work on `main`, all merged by fast-forward:
 
 | Branch (kept as a souvenir) | What it added | Decisions |
 |---|---|---|
@@ -14,7 +18,7 @@ invariants, gotchas), then this page. Last updated: 2026-11-09.
 | `feat/setting-depth` | Directorate posters/signs and Vostravan graffiti, a low male choir in the score, Slavic crew names, mission lines rewritten for the setting | — |
 | `perf/render-budget` | The performance pass below, plus the playtest perf log | D30–D33 |
 
-Tests: 220 passing. `npm run build` is clean.
+Tests: 227 passing on `perf/audit-pass` (220 on `main`). `npm run build` is clean.
 
 ## Performance: what was done and what's left
 
@@ -49,18 +53,29 @@ Measured on the owner's machine (first perf-log session, before the dynamic reso
 
 Not yet verified by the owner: the slow-frame dynamic resolution, and whether the warm-up frame removed the first-fight stutters.
 
-Next candidates, roughly in order:
+### The audit pass (`perf/audit-pass`, D34–D37)
 
-1. **Read the next perf-log session.** If stutters remain, look at the new `cpu` field. Low CPU on a long frame points at the GPU or driver; high CPU points at script.
-2. **Tank models are built lazily.** `tankVis` in `view.ts` builds each tank's model and materials when it first comes into view. If the stutters have high CPU, pre-build a pool of tank models per team at load. Observation rules still apply: never read `World`.
-3. **Reduce the fixed ~8 ms:**
-   - GTAO re-renders the whole scene for normals.
-   - The moon shadow redraws every frame while you drive.
-   - 500–980 draw calls per frame in the second half of The Long Night.
-4. **Bigger items, not started:**
-   - Merge the post passes into one or two shaders (~1 h). The chain is scene, GTAO, bloom, output, SMAA, grade.
-   - Bake the procedural surfaces into textures at load (~1.5–2 h).
-   - A WebGPU port (days; the custom shaders would need rewriting in three.js's node shading).
+[PERF-AUDIT.md](PERF-AUDIT.md) has the findings, the before/after counts and the ranked list of
+what was *not* done. In short, per driving frame on The Long Night: draw calls ~650 → ~160,
+triangles ~780k → ~300k, vertex-shader runs ~2.3M → ~0.44M, one scene render instead of two,
+6 full-resolution passes instead of 9, and much cheaper lighting and noise per pixel.
+
+**None of it has been measured on the M1.** The cloud session can only count and compare pictures.
+So the first job next session:
+
+1. **Read the next perf-log session** and compare frame time against render scale with the first
+   one (8 ms + 5.4 ms/Mpx). `draws` in the samples should be ~120–200, not 500–980.
+2. If the owner reports anything odd in shadows, puddles, mist or AO, PERF-AUDIT's "What to check"
+   says which change to suspect.
+3. Then pick from PERF-AUDIT's "Suggestions not done". The first one (per-pass GPU timers in the
+   overlay and the perf log) makes every later choice a measured one.
+
+How the pieces fit now (details in CLAUDE.md gotchas):
+
+- `post.ts` owns the frame's passes; there is no EffectComposer.
+- Shadows come from stand-in meshes on two layers (`SHADOW_LAYER` scenery, `SHADOW_DYNAMIC_LAYER`
+  things that move). `moonshadow.ts` fills the moon's map; three.js still draws the lamps' maps.
+- `materials.ts` owns the two noise textures and the light-skip shader patch.
 
 ## The playtest perf log (reading it)
 
@@ -86,6 +101,11 @@ Keep the artifact's capabilities when republishing. Omitting `capabilities` carr
   - Frame times there are only a relative proxy. Draw and vertex counts (hook `drawElements` and `viewport`) are exact and comparable.
   - Dynamic resolution ignores frames over 250 ms, so it never acts headless.
   - To compare images, freeze it: `v.dynRes.update = () => false; v.dynRes.scale = 1; v.resize()`.
+  - For *exact* comparisons between builds (baseline against itself = 0 difference), see
+    "Reproducing the measurements" in PERF-AUDIT.md: stub rAF and step frames by hand, seed
+    `Math.random`, fix `Date.now`, re-deal the rain.
+  - A click that starts a mission blocks for the whole world build and warm-up frame (tens of
+    seconds here): trigger it with `page.evaluate(() => el.click())`, not `page.click` with a timeout.
 - **Dev server:** start it detached, or it dies between turns: `setsid nohup npx vite --port 5199 --strictPort > log 2>&1 < /dev/null &`.
 - **Don't edit `src` while a headless run is going.** Vite's hot reload breaks the run.
 - **Comparing against an older build:**
