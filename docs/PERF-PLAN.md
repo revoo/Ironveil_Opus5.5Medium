@@ -87,8 +87,7 @@ only on the owner's word.
 
 Read `CLAUDE.md` and `docs/HANDOFF.md` first. Then:
 
-1. **Branch.** If `main` contains commit `60f4f39`, branch from `main`; otherwise from
-   `perf/audit-pass`. Name it `perf/plan-2`. One commit per task. Push the branch
+1. **Branch.** Branch from `main` (it already contains the audit pass). Name it `perf/plan-2`. One commit per task. Push the branch
    (`git push -u origin perf/plan-2`). Do not merge, do not open a pull request.
 2. **Only touch** `src/client/three/`, `src/client/main.ts` (Task 7), `tests/`, `tools/perf/`,
    `docs/` and `CLAUDE.md`. Never `src/sim`, `src/ai`, `src/game`, `src/level`.

@@ -5,10 +5,9 @@ invariants, gotchas), then this page. Last updated: 2026-11-10.
 
 ## Where things stand
 
-`main` holds everything up to the render-budget pass. **`perf/audit-pass` is pushed but not merged**:
-a performance audit and a second optimisation pass (D34–D37, [PERF-AUDIT.md](PERF-AUDIT.md)). The
-preview artifact runs that branch. The owner has playtested it (120 fps locked on the M1 Pro, see
-below) but has not yet said "merge".
+`main` holds everything, including the performance audit and second optimisation pass (D34–D37,
+[PERF-AUDIT.md](PERF-AUDIT.md)), merged by fast-forward after the owner's playtest (120 fps locked on
+the M1 Pro, see below). Branch `perf/audit-pass` is kept as a souvenir. The preview artifact runs it.
 
 **Next work is written up as a work order: [PERF-PLAN.md](PERF-PLAN.md).** It is meant to be
 executed task by task, with the harness in `tools/perf/` proving each step.

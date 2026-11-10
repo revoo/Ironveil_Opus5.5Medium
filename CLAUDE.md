@@ -114,13 +114,13 @@ measured results, how to read the playtest perf log, and practical notes for clo
 - `main` holds everything; work on short-lived branches off `main`, merge by fast-forward when the
   owner says so. The Render Lab experiment is preserved on the read-only branch
   `archive/poc-render-tech`; its code now lives in `src/client/three/`.
-- **Pushed, playtested, awaiting the owner's "merge": `perf/audit-pass`** (performance audit, D34–D37,
-  docs/PERF-AUDIT.md). The preview artifact runs it.
+- The performance audit pass (D34–D37, docs/PERF-AUDIT.md) is merged into `main`; branch
+  `perf/audit-pass` is kept as a souvenir. The preview artifact runs it.
 - **Next performance work is a written work order: docs/PERF-PLAN.md** (not started). The harness that
   verifies it is `tools/perf/` (counts, PASS/FAIL checks, deterministic screenshots; see its README).
 - **Merged branches are kept as souvenirs** (owner's wish), never deleted: `fix/headlight-shader-recompile`,
   `feat/perf-telemetry`, `feat/enemy-barks`, `feat/demo-level`, `feat/combat-fx`, `feat/charged-shot`,
-  `feat/comms-panel`, `feat/vostrava-theme`, `feat/setting-depth`, `perf/render-budget`.
+  `feat/comms-panel`, `feat/vostrava-theme`, `feat/setting-depth`, `perf/render-budget`, `perf/audit-pass`.
   Cloud sessions can't rename or delete branches or push tags; queue such chores below for a
   desktop session.
 - Shipped recently: the comms panel and synthesised voices (D28), the fictional Vostrava/Graustein
