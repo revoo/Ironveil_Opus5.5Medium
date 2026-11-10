@@ -2,9 +2,9 @@
 // wall slabs, buildings and set dressing. Everything is bevelled so edges catch light, and every
 // material goes through the procedural detail layer in materials.ts.
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Surface, proc } from './materials';
+import { ensureIndex, roundedBox } from './geometry';
 
 export function rand(seed: number): () => number {
   seed = (Math.abs(Math.floor(seed)) % 2147483646) + 1;
@@ -131,10 +131,10 @@ export function wallRun(parent: THREE.Object3D, m: Materials, cx: number, cz: nu
     const off = -len / 2 + (i + 0.5) * slabLen;
     const h = height - 10;
     const mat = r() < 0.55 ? m.wallVariants[Math.floor(r() * m.wallVariants.length)]! : m.wallPlain;
-    const slab = new THREE.Mesh(new RoundedBoxGeometry(slabLen - 1.5, h, thick * 0.55, 2, 1.6), mat);
+    const slab = new THREE.Mesh(roundedBox(slabLen - 1.5, h, thick * 0.55, 2, 1.6), mat);
     slab.position.set(off, h / 2, -thick * 0.2);
     slab.rotation.z = (r() - 0.5) * 0.008;
-    const foot = new THREE.Mesh(new RoundedBoxGeometry(slabLen - 1.5, 7, thick, 2, 1.5), m.wallPlain);
+    const foot = new THREE.Mesh(roundedBox(slabLen - 1.5, 7, thick, 2, 1.5), m.wallPlain);
     foot.position.set(off, 3.5, 0);
     g.add(slab, foot);
   }
@@ -157,9 +157,9 @@ export function building(parent: THREE.Object3D, m: Materials, x: number, z: num
   const r = rand(seed);
   const g = new THREE.Group();
   const wallMat = seed % 2 ? m.building2 : m.building;
-  const body = new THREE.Mesh(new RoundedBoxGeometry(w, height, d, 2, 2), wallMat);
+  const body = new THREE.Mesh(roundedBox(w, height, d, 2, 2), wallMat);
   body.position.y = height / 2;
-  const roof = new THREE.Mesh(new RoundedBoxGeometry(Math.max(4, w - 10), 3, Math.max(4, d - 10), 2, 1), m.roof);
+  const roof = new THREE.Mesh(roundedBox(Math.max(4, w - 10), 3, Math.max(4, d - 10), 2, 1), m.roof);
   roof.position.y = height + 0.5;
   g.add(body, roof);
   for (const [px, pz, pw, pd] of [
@@ -168,7 +168,7 @@ export function building(parent: THREE.Object3D, m: Materials, x: number, z: num
     [w / 2 - 2, 0, 4, d],
     [-w / 2 + 2, 0, 4, d],
   ] as const) {
-    const p = new THREE.Mesh(new RoundedBoxGeometry(pw, 8, pd, 1, 1), wallMat);
+    const p = new THREE.Mesh(roundedBox(pw, 8, pd, 1, 1), wallMat);
     p.position.set(px, height + 4, pz);
     g.add(p);
   }
@@ -176,7 +176,7 @@ export function building(parent: THREE.Object3D, m: Materials, x: number, z: num
   for (let i = 0; i < n; i++) {
     const s = 12 + r() * 16;
     if (w < s + 30 || d < s + 30) break;
-    const ac = new THREE.Mesh(new RoundedBoxGeometry(s, 8 + r() * 8, s * 0.8, 2, 1.5), m.metal);
+    const ac = new THREE.Mesh(roundedBox(s, 8 + r() * 8, s * 0.8, 2, 1.5), m.metal);
     ac.position.set((r() - 0.5) * (w - s - 24), height + 6, (r() - 0.5) * (d - s - 24));
     g.add(ac);
   }
@@ -234,7 +234,7 @@ export function lamp(parent: THREE.Object3D, m: Materials, x: number, z: number,
   base.position.set(-18, 4, 0);
   const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-18, LAMP_HEIGHT + 4, 0), new THREE.Vector3(-17, LAMP_HEIGHT + 14, 0), new THREE.Vector3(0, LAMP_HEIGHT + 4, 0));
   const arm = new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 1.6, 6), m.pole);
-  const head = new THREE.Mesh(new RoundedBoxGeometry(16, 5, 9, 2, 2), m.pole);
+  const head = new THREE.Mesh(roundedBox(16, 5, 9, 2, 2), m.pole);
   head.position.set(0, LAMP_HEIGHT + 2, 0);
   const bulbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(8, 4.4, 1.6) });
   const bulb = new THREE.Mesh(new THREE.BoxGeometry(11, 1, 5), bulbMat);
@@ -277,7 +277,7 @@ export function barrier(parent: THREE.Object3D, m: Materials, x: number, z: numb
   const len = Math.max(w, d);
   const n = Math.max(3, Math.round(len / 14));
   for (let i = 0; i < n; i++) {
-    const seg = new THREE.Mesh(new RoundedBoxGeometry(len / n - 0.5, 4, 4, 1, 1), i % 2 ? m.stripeRed : m.stripe);
+    const seg = new THREE.Mesh(roundedBox(len / n - 0.5, 4, 4, 1, 1), i % 2 ? m.stripeRed : m.stripe);
     seg.position.set(-len / 2 + (i + 0.5) * (len / n), 22, 0);
     g.add(seg);
   }
@@ -294,7 +294,7 @@ export function barrier(parent: THREE.Object3D, m: Materials, x: number, z: numb
 export function railcar(parent: THREE.Object3D, m: Materials, x: number, z: number, w: number, d: number): void {
   const g = new THREE.Group();
   const long = Math.max(w, d), short = Math.min(w, d);
-  const body = new THREE.Mesh(new RoundedBoxGeometry(long - 8, 34, short - 6, 2, 2), m.crate);
+  const body = new THREE.Mesh(roundedBox(long - 8, 34, short - 6, 2, 2), m.crate);
   body.position.y = 26;
   g.add(body);
   for (let i = 1; i < Math.floor(long / 10); i++) {
@@ -338,7 +338,6 @@ export interface TankModel {
   turret: THREE.Group;
   barrel: THREE.Group;
   beam: THREE.Mesh;
-  wheels: THREE.Mesh[];
   materials: THREE.MeshStandardMaterial[];
 }
 
@@ -383,6 +382,47 @@ function turretGeometry(team: 0 | 1): THREE.BufferGeometry {
   return g;
 }
 
+/**
+ * Collects the pieces of one rigid part of a model (already placed in the part's own space) and
+ * merges them into one mesh per material, plus one positions-only shadow stand-in for the lot.
+ * A tank built piece by piece was ~38 draws in the view and again in every shadow map it stood in.
+ */
+class Parts {
+  private by = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  private o = new THREE.Object3D();
+  /** `place` positions the piece as it would a mesh. */
+  add(g: THREE.BufferGeometry, mat: THREE.Material, place?: (o: THREE.Object3D) => void): void {
+    if (place) {
+      this.o.position.set(0, 0, 0);
+      this.o.rotation.set(0, 0, 0);
+      place(this.o);
+      this.o.updateMatrix();
+      g.applyMatrix4(this.o.matrix);
+    }
+    const list = this.by.get(mat) ?? [];
+    list.push(ensureIndex(g));
+    this.by.set(mat, list);
+  }
+  build(parent: THREE.Object3D): void {
+    const all: THREE.BufferGeometry[] = [];
+    for (const [mat, geos] of this.by) {
+      const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      all.push(...geos);
+    }
+    const whole = mergeGeometries(all, false);
+    whole.deleteAttribute('normal');
+    whole.deleteAttribute('uv');
+    const proxy = new THREE.Mesh(whole, shadowProxyMaterial);
+    proxy.layers.set(SHADOW_DYNAMIC_LAYER);
+    proxy.castShadow = true;
+    parent.add(proxy);
+    all.forEach((g) => g.dispose());
+    this.by.clear();
+  }
+}
+
 export function buildTank(scene: THREE.Scene, team: 0 | 1, beamMat: THREE.Material): TankModel {
   const paint = proc(new THREE.MeshStandardMaterial({ color: team === 0 ? 0x5f95a8 : 0xa8664a, roughness: 0.55, metalness: 0.25 }), Surface.Paint, { scale: 0.14, bump: 0.35 });
   const steel = proc(new THREE.MeshStandardMaterial({ color: 0x2a2d2e, roughness: 0.6, metalness: 0.7 }), Surface.Paint, { scale: 0.2, bump: 0.3 });
@@ -390,92 +430,71 @@ export function buildTank(scene: THREE.Scene, team: 0 | 1, beamMat: THREE.Materi
   const rubber = new THREE.MeshStandardMaterial({ color: 0x141515, roughness: 0.9 });
   const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 4.6, 3.6) });
 
+  // Three rigid parts: hull, turret (turns on the hull), gun (recoils in the turret).
   const root = new THREE.Group();
-  root.add(new THREE.Mesh(hullGeometry(), paint));
-  const wheels: THREE.Mesh[] = [];
+  const hull = new Parts();
+  hull.add(hullGeometry(), paint);
   for (const z of [-15.5, 15.5]) {
-    const track = new THREE.Mesh(new RoundedBoxGeometry(54, 10, 8, 2, 3.5), trackMat);
-    track.position.set(0, 5.5, z);
-    root.add(track);
-    for (let i = 0; i < 5; i++) {
-      const w = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 2, 14), rubber);
-      w.rotation.x = Math.PI / 2;
-      w.position.set(-19 + i * 9.5, 5, z + Math.sign(z) * 4.3);
-      root.add(w);
-      wheels.push(w);
-    }
-    const fender = new THREE.Mesh(new RoundedBoxGeometry(56, 1.6, 10, 1, 0.7), paint);
-    fender.position.set(0, 12, z);
-    root.add(fender);
-    const box = new THREE.Mesh(new RoundedBoxGeometry(14, 4, 7, 2, 1.2), steel);
-    box.position.set(-12, 14.6, z * 0.9);
-    root.add(box);
-    if (team === 1) {
-      // side skirts: Rustguard silhouette
-      const skirt = new THREE.Mesh(new RoundedBoxGeometry(48, 7, 1.4, 1, 0.5), paint);
-      skirt.position.set(2, 8, z + Math.sign(z) * 5.6);
-      root.add(skirt);
-    }
+    hull.add(roundedBox(54, 10, 8, 2, 3.5), trackMat, (o) => o.position.set(0, 5.5, z));
+    for (let i = 0; i < 5; i++)
+      hull.add(new THREE.CylinderGeometry(4.2, 4.2, 2, 14), rubber, (o) => {
+        o.rotation.x = Math.PI / 2;
+        o.position.set(-19 + i * 9.5, 5, z + Math.sign(z) * 4.3);
+      });
+    hull.add(roundedBox(56, 1.6, 10, 1, 0.7), paint, (o) => o.position.set(0, 12, z));
+    hull.add(roundedBox(14, 4, 7, 2, 1.2), steel, (o) => o.position.set(-12, 14.6, z * 0.9));
+    // side skirts: Rustguard silhouette
+    if (team === 1) hull.add(roundedBox(48, 7, 1.4, 1, 0.5), paint, (o) => o.position.set(2, 8, z + Math.sign(z) * 5.6));
   }
-  const grille = new THREE.Mesh(new RoundedBoxGeometry(12, 1.2, 16, 1, 0.5), steel);
-  grille.position.set(-17, 18.4, 0);
-  root.add(grille);
-  for (const z of [-6, 6]) {
-    const ex = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 4, 8), steel);
-    ex.rotation.z = Math.PI / 2;
-    ex.position.set(-27, 13, z);
-    root.add(ex);
-  }
-  for (const z of [-9, 9]) {
-    const hl = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1.2, 10), lampMat);
-    hl.rotation.z = Math.PI / 2 - 0.6;
-    hl.position.set(23.4, 13.5, z);
-    root.add(hl);
-  }
+  hull.add(roundedBox(12, 1.2, 16, 1, 0.5), steel, (o) => o.position.set(-17, 18.4, 0));
+  for (const z of [-6, 6])
+    hull.add(new THREE.CylinderGeometry(1.6, 1.6, 4, 8), steel, (o) => {
+      o.rotation.z = Math.PI / 2;
+      o.position.set(-27, 13, z);
+    });
+  for (const z of [-9, 9])
+    hull.add(new THREE.CylinderGeometry(1.5, 1.5, 1.2, 10), lampMat, (o) => {
+      o.rotation.z = Math.PI / 2 - 0.6;
+      o.position.set(23.4, 13.5, z);
+    });
+  hull.build(root);
 
   const turret = new THREE.Group();
   turret.position.set(-3, 18, 0);
   root.add(turret);
-  turret.add(new THREE.Mesh(turretGeometry(team), paint));
-  const hatch = new THREE.Mesh(new THREE.CylinderGeometry(4, 4.4, 2.2, 14), steel);
-  hatch.position.set(-3, 9.6, 4);
-  turret.add(hatch);
-  const sight = new THREE.Mesh(new RoundedBoxGeometry(4, 3, 3, 1, 0.8), steel);
-  sight.position.set(5, 9.5, -5);
-  turret.add(sight);
-  const bustle = new THREE.Mesh(new RoundedBoxGeometry(6, 5, 18, 2, 1.2), steel);
-  bustle.position.set(-17, 4, 0);
-  turret.add(bustle);
+  const top = new Parts();
+  top.add(turretGeometry(team), paint);
+  top.add(new THREE.CylinderGeometry(4, 4.4, 2.2, 14), steel, (o) => o.position.set(-3, 9.6, 4));
+  top.add(roundedBox(4, 3, 3, 1, 0.8), steel, (o) => o.position.set(5, 9.5, -5));
+  top.add(roundedBox(6, 5, 18, 2, 1.2), steel, (o) => o.position.set(-17, 4, 0));
   for (const z of [-1, 1])
-    for (let i = 0; i < 3; i++) {
-      const sm = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 4, 8), steel);
-      sm.rotation.x = Math.PI / 2 - z * 0.5;
-      sm.rotation.z = -0.4;
-      sm.position.set(4 + i * 2.3, 6, z * 12.5);
-      turret.add(sm);
-    }
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 34, 4), steel);
-  antenna.position.set(-11, 22, -7);
-  antenna.rotation.z = 0.15;
-  turret.add(antenna);
+    for (let i = 0; i < 3; i++)
+      top.add(new THREE.CylinderGeometry(1, 1, 4, 8), steel, (o) => {
+        o.rotation.x = Math.PI / 2 - z * 0.5;
+        o.rotation.z = -0.4;
+        o.position.set(4 + i * 2.3, 6, z * 12.5);
+      });
+  top.add(new THREE.CylinderGeometry(0.25, 0.4, 34, 4), steel, (o) => {
+    o.position.set(-11, 22, -7);
+    o.rotation.z = 0.15;
+  });
+  top.build(turret);
 
   const barrel = new THREE.Group();
   barrel.position.set(14, 4.5, 0);
   turret.add(barrel);
-  const mantlet = new THREE.Mesh(new RoundedBoxGeometry(6, 6, 9, 2, 1.8), paint);
-  mantlet.position.set(1, 0, 0);
-  barrel.add(mantlet);
+  const gun = new Parts();
+  gun.add(roundedBox(6, 6, 9, 2, 1.8), paint, (o) => o.position.set(1, 0, 0));
   for (const [len, rad0, rad1, px] of [
     [34, 1.5, 1.9, 19],
     [10, 2.3, 2.3, 14],
     [4, 2.4, 2.4, 36],
-  ] as const) {
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(rad0, rad1, len, 12), steel);
-    t.rotation.z = -Math.PI / 2;
-    t.position.set(px, 0, 0);
-    barrel.add(t);
-  }
-  shadowed(root);
+  ] as const)
+    gun.add(new THREE.CylinderGeometry(rad0, rad1, len, 12), steel, (o) => {
+      o.rotation.z = -Math.PI / 2;
+      o.position.set(px, 0, 0);
+    });
+  gun.build(barrel);
 
   // The headlight itself is not part of the model: see `Headlights` in fx.ts.
   const beam = new THREE.Mesh(new THREE.ConeGeometry(64, 200, 24, 1, true), beamMat);
@@ -483,22 +502,33 @@ export function buildTank(scene: THREE.Scene, team: 0 | 1, beamMat: THREE.Materi
   beam.position.set(122, 12, 0);
   root.add(beam);
   scene.add(root);
-  return { root, turret, barrel, beam, wheels, materials: [paint, steel, trackMat] };
+  return { root, turret, barrel, beam, materials: [paint, steel, trackMat] };
 }
+
+/**
+ * Layers for shadow-only stand-in geometry: shadow cameras see them, the view camera does not.
+ * Scenery and things that move are kept apart so the moon's shadow map can cache the scenery
+ * (`moonshadow.ts`). A shadow caster that is *not* a stand-in (it is drawn in the view too, on
+ * layer 0) must also enable `SHADOW_DYNAMIC_LAYER`, or it casts no moon shadow.
+ */
+export const SHADOW_LAYER = 1;
+export const SHADOW_DYNAMIC_LAYER = 2;
+/** Never drawn to the screen: only its side matters (a shadow map draws the back faces of a front-sided material). */
+const shadowProxyMaterial = new THREE.MeshBasicMaterial();
 
 /**
  * Static batching: bake every opaque mesh under `root` into world space and merge the ones that
  * share a material into one draw. Lights, sprites and instanced meshes move to the scene unchanged.
  */
-export function mergeStatic(root: THREE.Object3D, scene: THREE.Scene): void {
+export function mergeStatic(root: THREE.Object3D, scene: THREE.Scene, shadows?: ShadowProxies): void {
   root.updateMatrixWorld(true);
-  const groups = new ChunkMerger();
+  const groups = new ChunkMerger(shadows);
   const keep: THREE.Object3D[] = [];
   root.traverse((o) => {
     if (o === root) return;
     const m = o as THREE.Mesh;
     if (m.isMesh && !(m as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(m.material) && !m.material.transparent) {
-      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      const g = m.geometry.clone();
       g.applyMatrix4(m.matrixWorld);
       for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
       if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position!.count * 2), 2));
@@ -512,22 +542,28 @@ export function mergeStatic(root: THREE.Object3D, scene: THREE.Scene): void {
 
 /**
  * Merges static geometry per material *and per map tile*. One draw per material for the whole
- * map would be fewest calls, but then every mesh spans the map and nothing can be culled: each
- * shadow-casting light re-drew the entire city. Tiles let the camera and each light's shadow
- * camera skip what they can't see, for a few more (cheap) draw calls.
+ * map would be fewest calls, but then every mesh spans the map and nothing can be culled.
+ * Tiles let the camera skip what it can't see, for a few more (cheap) draw calls.
+ *
+ * Geometry stays indexed: a bevelled box is 300 triangles over 216 shared vertices, so the vertex
+ * shader runs a quarter as often as on a triangle soup (and the buffers are a third of the size).
+ * These meshes don't cast shadows themselves; see `ShadowProxies`.
  */
 export class ChunkMerger {
   static readonly TILE = 768;
   private byKey = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
   private box = new THREE.Box3();
   private c = new THREE.Vector3();
+  constructor(private shadows?: ShadowProxies) {}
   add(g: THREE.BufferGeometry, mat: THREE.Material): void {
-    if (g.index) g = g.toNonIndexed();
+    ensureIndex(g);
     this.box.setFromBufferAttribute(g.attributes.position as THREE.BufferAttribute).getCenter(this.c);
     const key = `${mat.uuid}:${Math.floor(this.c.x / ChunkMerger.TILE)}:${Math.floor(this.c.z / ChunkMerger.TILE)}`;
     const e = this.byKey.get(key) ?? { mat, geos: [] };
     e.geos.push(g);
     this.byKey.set(key, e);
+    // alpha-tested decals (posters flat on a wall) throw no shadow worth drawing
+    if (this.shadows && mat.alphaTest === 0) this.shadows.add(g, this.c);
   }
   flush(scene: THREE.Object3D): void {
     for (const { mat, geos } of this.byKey.values()) {
@@ -536,10 +572,60 @@ export class ChunkMerger {
       if (!merged) continue;
       merged.computeBoundingSphere();
       const mesh = new THREE.Mesh(merged, mat);
-      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.castShadow = !this.shadows;
+      mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       scene.add(mesh);
     }
     this.byKey.clear();
+  }
+}
+
+/**
+ * Shadow-only stand-ins for the static scenery.
+ *
+ * A shadow map only needs positions, and every opaque caster draws with the same depth shader, so
+ * the scenery's shadows don't need its dozen-odd materials or its normals and UVs. All static
+ * casters are merged again here, positions only, one mesh per small map tile whatever the material:
+ * a lamp's shadow map is then a handful of draws of what is actually under the lamp, instead of
+ * every material of every 768-unit tile it touches. The stand-ins live on `SHADOW_LAYER`, which
+ * only the lights' shadow cameras look at; the visible scenery receives shadows but casts none.
+ */
+export class ShadowProxies {
+  static readonly TILE = 256;
+  private tiles = new Map<string, { pos: Float32Array[]; idx: THREE.TypedArray[]; verts: number; indices: number }>();
+  /** `centre` is the piece's bounding-box centre (the caller has it already). */
+  add(g: THREE.BufferGeometry, centre: THREE.Vector3): void {
+    const key = `${Math.floor(centre.x / ShadowProxies.TILE)}:${Math.floor(centre.z / ShadowProxies.TILE)}`;
+    let t = this.tiles.get(key);
+    if (!t) this.tiles.set(key, (t = { pos: [], idx: [], verts: 0, indices: 0 }));
+    const pos = g.attributes.position!.array as Float32Array, idx = g.index!.array;
+    t.pos.push(pos.slice());
+    t.idx.push(idx.slice());
+    t.verts += pos.length / 3;
+    t.indices += idx.length;
+  }
+  flush(scene: THREE.Object3D): void {
+    for (const t of this.tiles.values()) {
+      const pos = new Float32Array(t.verts * 3);
+      const idx = t.verts > 65535 ? new Uint32Array(t.indices) : new Uint16Array(t.indices);
+      let v = 0, i = 0;
+      t.pos.forEach((p, k) => {
+        pos.set(p, v * 3);
+        const src = t.idx[k]!;
+        for (let j = 0; j < src.length; j++) idx[i++] = src[j]! + v;
+        v += p.length / 3;
+      });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, shadowProxyMaterial);
+      mesh.layers.set(SHADOW_LAYER);
+      mesh.castShadow = true;
+      mesh.matrixAutoUpdate = false;
+      scene.add(mesh);
+    }
+    this.tiles.clear();
   }
 }

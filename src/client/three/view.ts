@@ -4,13 +4,6 @@
 // simply never drawn. The simulation runs at a fixed 30 Hz; this view interpolates between the
 // last two ticks every frame.
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { MissionSession } from '../../game/mission/session';
 import type { Observation, ObsEvent, TankView } from '../../sim/observation';
 import type { Vec } from '../../sim/math';
@@ -21,7 +14,7 @@ import type { InputManager } from '../input';
 import type { AudioEngine } from '../audio';
 import type { Settings } from '../settings';
 import { buildEnvironment, procUniforms } from './materials';
-import { buildTank, radialTexture, type TankModel } from './models';
+import { buildTank, radialTexture, SHADOW_DYNAMIC_LAYER, SHADOW_LAYER, type TankModel } from './models';
 import { buildWorld, type BuiltWorld } from './world';
 import { CueArcs, Decals, Flashes, GlowLights, Headlights, Mist, Rain, SmokeFx, Sparks, coneMaterial } from './fx';
 import { Blasts } from './blast';
@@ -31,6 +24,8 @@ import { Telemetry } from './telemetry';
 import { LampLights } from './lamps';
 import { DynamicResolution } from './dynres';
 import { PerfLog } from './perflog';
+import { PostChain } from './post';
+import { MoonShadow } from './moonshadow';
 import { codeLabel } from '../settings';
 
 export interface MissionViewDeps {
@@ -46,8 +41,6 @@ interface TankVis {
   model: TankModel;
   team: 0 | 1;
   recoil: number;
-  wheel: number;
-  last: Vec | null;
   dead: boolean;
   /** Hit glow on the hull, 1 at impact, fading. */
   flash: number;
@@ -58,44 +51,28 @@ interface TankVis {
   ring: THREE.Mesh;
   /** The turret blown off the wreck, flying until it lands. */
   toss: { vx: number; vy: number; vz: number; sx: number; sz: number; landed: boolean } | null;
+  /** Pose and visibility its shadow was last drawn with (see `trackCasters`). */
+  shadowKey: number[];
+  shadowSeen: boolean;
 }
 
-const GRADE = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) }, uHurt: { value: 0 } },
-  vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; uniform float uHurt; varying vec2 vUv;
-    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-    void main() {
-      vec2 d = vUv - 0.5;
-      float r2 = dot(d, d);
-      vec2 off = d * r2 * (0.012 + uHurt * 0.04);
-      vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
-      float l = dot(c, vec3(0.299, 0.587, 0.114));
-      c = mix(c, c * vec3(0.86, 1.0, 1.1), 1.0 - smoothstep(0.0, 0.42, l));
-      c = mix(c, c * vec3(1.07, 1.0, 0.88), smoothstep(0.4, 1.0, l));
-      c = mix(vec3(l), c, 0.9);
-      c = c * 0.97 + 0.012;
-      c *= 1.0 - r2 * 1.1;
-      c = mix(c, c * vec3(1.4, 0.35, 0.3), uHurt * smoothstep(0.05, 0.35, r2));   // damage vignette
-      c += (hash(vUv * uRes + fract(uTime) * 100.0) - 0.5) * 0.04;
-      gl_FragColor = vec4(c, 1.0);
-    }`,
-};
+/** Screen corners (NDC), in drawing order for the minimap's view outline. */
+const FOOTPRINT = [
+  [-1, -1],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+] as const;
 
 export class MissionView3D {
   readonly session: MissionSession;
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 8000);
-  private composer!: EffectComposer;
-  private gtao!: GTAOPass;
-  private bloom!: UnrealBloomPass;
-  private smaa!: SMAAPass;
-  private grade!: ShaderPass;
+  private post: PostChain;
   private world: BuiltWorld;
   private moon: THREE.DirectionalLight;
-  private moonOffset: THREE.Vector3;
+  private moonShadow: MoonShadow;
   private lampCones: THREE.Mesh[] = [];
   private beamMats: THREE.ShaderMaterial[] = [];
   private tanks = new Map<number, TankVis>();
@@ -103,8 +80,10 @@ export class MissionView3D {
   private chargeRingGeo = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
   /** Lights the player's hull while the cannon charges. Always present, so the light count never changes. */
   private glow: GlowLights;
-  /** Moon shadow cache: what the shadow map was last drawn with. */
-  private moonKey: number[] = [];
+  /** Shadow casters whose pose changed this frame (tanks, settling wrecks); refilled every frame. */
+  private moved: { x: number; z: number }[] = [];
+  /** Where every visible moving shadow caster is this frame: tanks, and turrets blown off wrecks. */
+  private casters: THREE.Vector3[] = [];
   private lampLights!: LampLights;
   private lampK: number[] = [];
   private dynRes = new DynamicResolution();
@@ -113,7 +92,6 @@ export class MissionView3D {
   private wasFull = false;
   private frameDt = 0;
   private ghosts: THREE.Mesh[] = [];
-  private mist: Mist;
   private rain: Rain;
   private decals: Decals;
   private sparks: Sparks;
@@ -144,6 +122,14 @@ export class MissionView3D {
   private miniBase: HTMLCanvasElement;
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  /** The view's size in CSS pixels, read in `resize` only: asking the DOM every frame forces a layout. */
+  private viewW = 1;
+  private viewH = 1;
+  // scratch objects for the per-frame maths
+  private v2 = new THREE.Vector2();
+  private v3 = new THREE.Vector3();
+  /** The minimap is redrawn once per simulation tick, not once per frame. */
+  private miniTick = -1;
   private listeners: (() => void)[] = [];
   // audio direction state
   private heardRadio = new Set<string>();
@@ -176,17 +162,18 @@ export class MissionView3D {
     scene.environmentIntensity = 0.55;
     scene.add(new THREE.HemisphereLight(0x6c8088, 0x1a201c, 0.35));
     this.moon = new THREE.DirectionalLight(0xa9c0d4, 1.2);
-    this.moonOffset = new THREE.Vector3(-520, 950, -650);
     this.moon.castShadow = true;
-    this.moon.shadow.autoUpdate = false;
-    this.moon.shadow.needsUpdate = true;
+    this.moon.shadow.autoUpdate = false; // drawn by MoonShadow
     const low = d.settings.lowEffects;
     this.moon.shadow.mapSize.setScalar(low ? 1024 : 2048);
     this.moon.shadow.bias = -0.0003;
     this.moon.shadow.normalBias = 1.2;
     this.moon.shadow.radius = 3;
     Object.assign(this.moon.shadow.camera, { near: 100, far: 3000 });
+    this.moon.shadow.camera.layers.enable(SHADOW_LAYER);
+    this.moon.shadow.camera.layers.enable(SHADOW_DYNAMIC_LAYER);
     scene.add(this.moon, this.moon.target);
+    this.moonShadow = new MoonShadow(this.renderer, scene, this.moon, new THREE.Vector3(-520, 950, -650));
 
     this.world = buildWorld(scene, this.session.level);
     for (const l of this.world.lamps) {
@@ -197,7 +184,7 @@ export class MissionView3D {
     }
     this.lampLights = new LampLights(scene, this.world.lamps, low);
     procUniforms.uProcOn.value = low ? 0 : 1;
-    this.mist = new Mist(scene, this.world.lamps.map((l) => ({ x: l.x, y: l.z })), this.world.width, this.world.height);
+    new Mist(scene, this.world.lamps.map((l) => ({ x: l.x, y: l.z })), this.world.width, this.world.height);
     this.rain = new Rain(scene);
     this.decals = new Decals(scene);
     this.sparks = new Sparks(scene);
@@ -277,7 +264,7 @@ export class MissionView3D {
       () => window.removeEventListener('resize', onResize),
     );
 
-    this.buildComposer();
+    this.post = new PostChain(this.renderer, this.scene, this.camera, low);
     this.resize();
     d.audio.setScene('mission');
     d.audio.setMood('calm');
@@ -311,13 +298,13 @@ export class MissionView3D {
     });
     // Compile the variant the composer actually renders (into its offscreen target: no tone
     // mapping, linear output), not the on-screen one.
-    this.renderer.setRenderTarget(this.composer.renderTarget1);
+    this.renderer.setRenderTarget(this.post.sceneTarget);
     this.renderer.compile(this.scene, this.camera);
     this.renderer.setRenderTarget(null);
     // Compiling isn't everything: on a Mac the browser runs WebGL on Metal, which builds a pipeline
     // the first time each material *draws* into each kind of target (scene, shadow maps, AO normals),
     // and textures upload on first draw. Both stalled the first fight for ~120 ms. So draw one real
-    // frame through the whole composer with every pooled effect shown and nothing culled; it is
+    // frame through the whole post chain with every pooled effect shown and nothing culled; it is
     // overwritten by the first real frame before the browser ever shows it.
     const culled: THREE.Object3D[] = [];
     const empty: THREE.InstancedMesh[] = [];
@@ -333,62 +320,30 @@ export class MissionView3D {
       }
     });
     this.placeCamera();
-    this.moon.shadow.needsUpdate = true;
-    this.composer.render();
-    this.moon.shadow.needsUpdate = true;
+    this.placeMoon();
+    this.moonShadow.update(true, [], true); // no map yet: three.js draws it whole in the frame below
+    this.post.render(0, 0);
+    this.moonShadow.update(true, [], true); // and now the two-layer path, so its shaders are warm too
     for (const o of culled) o.frustumCulled = true;
     for (const im of empty) im.count = 0;
     for (const o of hidden) o.visible = false;
   }
 
-  private buildComposer(): void {
-    const low = this.d.settings.lowEffects;
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.gtao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight);
-    this.gtao.updateGtaoMaterial({ radius: 14, distanceExponent: 1.4, thickness: 4, scale: 1.2, samples: 12, distanceFallOff: 1 });
-    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 8 });
-    // GTAO re-renders depth+normals; see-through effects must not be in that buffer.
-    const gtaoRender = this.gtao.render.bind(this.gtao);
-    this.gtao.render = (...args: Parameters<GTAOPass['render']>) => {
-      const hidden: THREE.Object3D[] = [];
-      this.scene.traverseVisible((o) => {
-        const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
-        if ((o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints || (o as THREE.Line).isLine || (mat && !Array.isArray(mat) && mat.transparent)) hidden.push(o);
-      });
-      hidden.forEach((o) => (o.visible = false));
-      gtaoRender(...args);
-      hidden.forEach((o) => (o.visible = true));
-    };
-    this.gtao.enabled = !low;
-    this.composer.addPass(this.gtao);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.55, 0.9);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
-    this.smaa = new SMAAPass();
-    this.smaa.enabled = !low;
-    this.composer.addPass(this.smaa);
-    this.grade = new ShaderPass(GRADE);
-    this.composer.addPass(this.grade);
-  }
-
   private resize(): void {
-    const w = this.container.clientWidth || innerWidth, h = this.container.clientHeight || innerHeight;
+    const w = (this.viewW = this.container.clientWidth || innerWidth), h = (this.viewH = this.container.clientHeight || innerHeight);
     // Retina screens report 2: at full DPR every effect pass runs on 4x the pixels for a sharpness
     // that the film grain and bloom mostly hide. High stops at 1.5, Low renders at CSS pixels.
     // Dynamic resolution scales that down when frames run long (never below 0.75 of a CSS pixel).
     const base = Math.min(devicePixelRatio, this.d.settings.lowEffects ? 1 : 1.5);
     const dpr = Math.max(Math.min(base, 0.75), base * this.dynRes.scale);
-    this.renderer.setPixelRatio(dpr);
-    this.renderer.setSize(w, h);
-    this.composer.setPixelRatio(dpr);
-    this.composer.setSize(w, h);
-    // ambient occlusion is soft by nature: compute it at half resolution (a quarter of the pixels)
-    this.gtao.setSize(Math.round((w * dpr) / 2), Math.round((h * dpr) / 2));
-    this.bloom.resolution.set((w * dpr) / 2, (h * dpr) / 2);
-    (this.grade.uniforms.uRes as { value: THREE.Vector2 }).value.set(w * dpr, h * dpr);
-    this.minimap.width = 196;
-    this.minimap.height = this.miniFollows() ? 147 : Math.round((196 * this.world.height) / this.world.width);
+    this.post.setSize(w, h, dpr);
+    // (setting a canvas's size clears it, so only when it really changes)
+    const mh = this.miniFollows() ? 147 : Math.round((196 * this.world.height) / this.world.width);
+    if (this.minimap.width !== 196 || this.minimap.height !== mh) {
+      this.minimap.width = 196;
+      this.minimap.height = mh;
+      this.miniTick = -1;
+    }
   }
 
   private drawMiniBase(): HTMLCanvasElement {
@@ -436,12 +391,18 @@ export class MissionView3D {
 
   // ------------------------------------------------------------------ camera
   private placeCamera(): void {
-    const w = this.container.clientWidth || innerWidth, h = this.container.clientHeight || innerHeight;
+    const w = this.viewW, h = this.viewH;
     const halfH = 360 / this.zoom;
-    Object.assign(this.camera, { left: (-halfH * w) / h, right: (halfH * w) / h, top: halfH, bottom: -halfH });
-    this.camera.updateProjectionMatrix();
+    const cam = this.camera;
+    cam.left = (-halfH * w) / h;
+    cam.right = (halfH * w) / h;
+    cam.top = halfH;
+    cam.bottom = -halfH;
+    cam.updateProjectionMatrix();
     const yaw = Math.PI / 4, pitch = Math.atan(1 / Math.SQRT2), dist = 2400;
-    const t = this.camTarget.clone().add(new THREE.Vector3((Math.random() - 0.5) * this.shake, 0, (Math.random() - 0.5) * this.shake));
+    const t = this.v3.copy(this.camTarget);
+    t.x += (Math.random() - 0.5) * this.shake;
+    t.z += (Math.random() - 0.5) * this.shake;
     this.camera.position.set(t.x + Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, t.z + Math.cos(yaw) * Math.cos(pitch) * dist);
     this.camera.lookAt(t);
     this.camera.updateMatrixWorld();
@@ -454,56 +415,45 @@ export class MissionView3D {
     return { x: this.camTarget.x, z: this.camTarget.z, halfW: (this.camera.right - this.camera.left) / 2, halfD: halfH * Math.sqrt(3) };
   }
 
-  /** Things that move and cast shadows into the lamp lights this frame: visible tanks and settling wrecks. */
-  private movers(): { x: number; z: number }[] {
-    const out: { x: number; z: number }[] = [];
-    for (const v of this.tanks.values()) {
-      const r = v.model.root;
-      if (r.visible && (!v.dead || v.deadT < 6)) out.push({ x: r.position.x, z: r.position.z });
-    }
-    return out;
-  }
-
-  /** Fit the moon's shadow map to the view and snap it to whole texels in light space (no shimmering). */
-  private placeMoon(): void {
-    const R = Math.max(this.camera.right - this.camera.left, (this.camera.top - this.camera.bottom) * 1.8) * 0.5 + 160;
-    const cam = this.moon.shadow.camera;
-    Object.assign(cam, { left: -R, right: R, top: R, bottom: -R });
-    cam.updateProjectionMatrix();
-    const texel = (2 * R) / this.moon.shadow.mapSize.x;
-    const rot = new THREE.Matrix4().lookAt(this.moonOffset, new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
-    const inv = rot.clone().transpose();
-    const c = this.camTarget.clone().applyMatrix4(inv);
-    c.x = Math.round(c.x / texel) * texel;
-    c.y = Math.round(c.y / texel) * texel;
-    c.applyMatrix4(rot);
-    this.moon.target.position.copy(c);
-    this.moon.position.copy(c).add(this.moonOffset);
-    this.moon.target.updateMatrixWorld();
-  }
-
   /**
-   * The moon's shadow map only needs redrawing when the view moved (its frustum follows the camera,
-   * snapped to texels) or something that casts a shadow moved: a tank, its turret or barrel, a
-   * settling wreck, flying debris. Sitting still in cover, it's drawn once instead of every frame.
+   * Which shadow casters changed since their shadows were last drawn: a tank that drove, turned its
+   * turret, recoiled, appeared or vanished, or a wreck still settling. A tank parked under a lamp
+   * (a guard at its post, the player waiting in cover) is not one, so its lamp's shadow map and the
+   * moon's stay cached.
    */
-  private cacheMoonShadow(): void {
-    const key: number[] = [this.moon.position.x, this.moon.position.z, this.moon.shadow.camera.right, this.blasts.debrisInFlight ? Math.random() : 0];
+  private trackCasters(): void {
+    this.moved.length = 0;
+    this.casters.length = 0;
     for (const v of this.tanks.values()) {
-      const m = v.model;
-      if (!m.root.visible) continue;
-      if (v.dead && v.deadT < 8) key.push(Math.random()); // wreck still settling, turret in the air
-      key.push(m.root.position.x, m.root.position.y, m.root.position.z, m.root.rotation.y, m.turret.rotation.y, m.barrel.position.x, m.barrel.position.z);
+      const m = v.model, r = m.root, k = v.shadowKey;
+      let moved = r.visible !== v.shadowSeen;
+      v.shadowSeen = r.visible;
+      if (r.visible) {
+        this.casters.push(r.position);
+        if (v.toss) this.casters.push(m.turret.position); // detached into the scene: a world position
+        if (v.dead && v.deadT < 8) moved = true; // wreck settling, turret in the air
+        const p = r.position, b = m.barrel.position;
+        if (Math.abs(p.x - k[0]!) > 0.02 || Math.abs(p.y - k[1]!) > 0.02 || Math.abs(p.z - k[2]!) > 0.02) moved = true;
+        if (Math.abs(r.rotation.y - k[3]!) > 0.002 || Math.abs(m.turret.rotation.y - k[4]!) > 0.002) moved = true;
+        if (Math.abs(b.x - k[5]!) > 0.05 || Math.abs(b.z - k[6]!) > 0.05) moved = true;
+        if (moved) {
+          k[0] = p.x; k[1] = p.y; k[2] = p.z;
+          k[3] = r.rotation.y; k[4] = m.turret.rotation.y;
+          k[5] = b.x; k[6] = b.z;
+        }
+      }
+      if (moved) this.moved.push({ x: r.position.x, z: r.position.z });
     }
-    const old = this.moonKey;
-    const same = old.length === key.length && key.every((k, i) => Math.abs(k - old[i]!) < 0.01);
-    if (!same) this.moon.shadow.needsUpdate = true;
-    this.moonKey = key;
+  }
+
+  /** Fit the moon's shadow frustum around the view (padded for shadows cast in from outside it). */
+  private placeMoon(): void {
+    this.moonShadow.place(this.camTarget, Math.max(this.camera.right - this.camera.left, (this.camera.top - this.camera.bottom) * 1.8) * 0.5 + 160);
   }
 
   /** Screen-relative WASD: W moves up the screen whatever the camera angle. */
   private screenRelative(mx: number, my: number): Vec {
-    const f = new THREE.Vector3();
+    const f = this.v3;
     this.camera.getWorldDirection(f);
     f.y = 0;
     f.normalize();
@@ -512,9 +462,8 @@ export class MissionView3D {
   }
 
   private project(x: number, y: number, h = 0): { x: number; y: number; on: boolean } {
-    const v = new THREE.Vector3(x, h, y).project(this.camera);
-    const w = this.container.clientWidth || innerWidth, hh = this.container.clientHeight || innerHeight;
-    return { x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * hh, on: Math.abs(v.x) <= 1.05 && Math.abs(v.y) <= 1.05 };
+    const v = this.v3.set(x, h, y).project(this.camera);
+    return { x: (v.x * 0.5 + 0.5) * this.viewW, y: (-v.y * 0.5 + 0.5) * this.viewH, on: Math.abs(v.x) <= 1.05 && Math.abs(v.y) <= 1.05 };
   }
 
   private pan(x: number): number {
@@ -540,8 +489,7 @@ export class MissionView3D {
 
   applySettings(): void {
     const low = this.d.settings.lowEffects;
-    this.gtao.enabled = !low;
-    this.smaa.enabled = !low;
+    this.post.setLow(low);
     this.perfLog.setLow(low);
     procUniforms.uProcOn.value = low ? 0 : 1;
     this.lampLights.setLow(low);
@@ -566,9 +514,8 @@ export class MissionView3D {
     this.d.audio.setScene('menu');
     // Free GPU memory and the WebGL context itself; otherwise every retry leaks a context
     // (browsers cap them at ~16) along with shadow maps and post-processing buffers.
-    this.composer.dispose();
-    this.gtao.dispose();
-    this.bloom.dispose();
+    this.post.dispose();
+    this.moonShadow.dispose();
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       m.geometry?.dispose();
@@ -604,9 +551,12 @@ export class MissionView3D {
     const s = this.session;
 
     // aim: mouse ray onto the ground plane
-    this.ray.setFromCamera(new THREE.Vector2(this.mouse.x, this.mouse.y), this.camera);
-    const hit = new THREE.Vector3();
-    if (this.ray.ray.intersectPlane(this.plane, hit)) this.aim = { x: hit.x, y: hit.z };
+    this.ray.setFromCamera(this.v2.set(this.mouse.x, this.mouse.y), this.camera);
+    const hit = this.v3;
+    if (this.ray.ray.intersectPlane(this.plane, hit)) {
+      this.aim.x = hit.x;
+      this.aim.y = hit.z;
+    }
     const tSim = performance.now();
     const ticks = s.advance(dt, () => {
       const inp = this.d.input.sample(this.aim);
@@ -650,10 +600,10 @@ export class MissionView3D {
       (this.lampCones[i]!.material as THREE.ShaderMaterial).uniforms.uStrength!.value = 0.16 * k;
       (this.lampCones[i]!.material as THREE.ShaderMaterial).uniforms.uTime!.value = t;
     });
-    this.lampLights.update(this.viewFootprint(), this.lampK, this.movers(), dt);
+    this.trackCasters();
+    this.lampLights.update(this.viewFootprint(), this.lampK, this.moved, dt);
     for (const m of this.beamMats) m.uniforms.uTime!.value = t;
     procUniforms.uTime.value = t;
-    this.mist.update(t);
     this.decals.syncTracks(cur);
     this.sparks.update(dt);
     this.smoke.update(cur, dt, this.camera);
@@ -663,13 +613,11 @@ export class MissionView3D {
     this.animateWrecks(dt);
     this.arcs.update(dt, selfPos);
     this.renderReticle(cur, selfPos);
-    (this.grade.uniforms.uTime as { value: number }).value = t;
-    (this.grade.uniforms.uHurt as { value: number }).value = this.hurt;
     this.glow.end({ x: this.camTarget.x, z: this.camTarget.z });
-    this.cacheMoonShadow();
     const tRender = performance.now();
     this.telemetry.gpuBegin();
-    this.composer.render();
+    this.moonShadow.update(this.moved.length > 0, this.casters, this.blasts.debrisInFlight);
+    this.post.render(t, this.hurt);
     this.telemetry.gpuEnd();
     const tHud = performance.now();
 
@@ -790,7 +738,7 @@ export class MissionView3D {
       const ring = new THREE.Mesh(this.chargeRingGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.1, 0.35), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       ring.visible = false;
       this.scene.add(ring);
-      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, wheel: 0, last: null, dead: false, flash: 0, deadT: -1, toss: null, glow, ring };
+      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, dead: false, flash: 0, deadT: -1, toss: null, glow, ring, shadowKey: [NaN, NaN, NaN, NaN, NaN, NaN, NaN], shadowSeen: false };
       this.tanks.set(t.id, v);
     }
     return v;
@@ -817,12 +765,6 @@ export class MissionView3D {
       m.turret.rotation.y = -(tur - hull);
       v.recoil *= Math.exp(-dt * 7);
       m.barrel.position.x = 14 - v.recoil * 5;
-      if (v.last) {
-        const fwd = (x - v.last.x) * Math.cos(hull) + (y - v.last.y) * Math.sin(hull);
-        v.wheel -= fwd / 4.2;
-        m.wheels.forEach((w) => (w.rotation.y = v.wheel));
-      }
-      v.last = { x, y };
       // In brush, a tank is drawn sunk a little and its lights dimmed (it is hidden from the enemy).
       m.root.position.y = t.inBrush ? -3 : 0;
       this.headlights.request({ x, z: y, y: m.root.position.y, hull, intensity: t.quiet ? 60000 : 220000 });
@@ -1048,6 +990,9 @@ export class MissionView3D {
   }
 
   private renderMinimap(cur: Observation, selfPos: Vec | null): void {
+    // the simulation ticks at 30 Hz: on a 60 or 120 Hz display most frames have nothing new to plot
+    if (cur.tick === this.miniTick) return;
+    this.miniTick = cur.tick;
     const ctx = this.minimap.getContext('2d')!;
     const W = this.minimap.width, H = this.minimap.height;
     const win = this.miniWindow(selfPos);
@@ -1080,21 +1025,15 @@ export class MissionView3D {
       ctx.strokeRect(lk.x * sx - 3, lk.y * sy - 3, 6, 6);
     }
     // view footprint
-    const corners = [
-      [-1, -1],
-      [1, -1],
-      [1, 1],
-      [-1, 1],
-    ].map(([x, y]) => {
-      const r = new THREE.Raycaster();
-      r.setFromCamera(new THREE.Vector2(x, y), this.camera);
-      const hit = new THREE.Vector3();
-      r.ray.intersectPlane(this.plane, hit);
-      return hit;
-    });
     ctx.strokeStyle = 'rgba(237,244,223,0.35)';
     ctx.beginPath();
-    corners.forEach((c, i) => (i ? ctx.lineTo(c.x * sx, c.z * sy) : ctx.moveTo(c.x * sx, c.z * sy)));
+    FOOTPRINT.forEach(([x, y], i) => {
+      this.ray.setFromCamera(this.v2.set(x, y), this.camera);
+      const c = this.v3;
+      if (!this.ray.ray.intersectPlane(this.plane, c)) return;
+      if (i) ctx.lineTo(c.x * sx, c.z * sy);
+      else ctx.moveTo(c.x * sx, c.z * sy);
+    });
     ctx.closePath();
     ctx.stroke();
   }

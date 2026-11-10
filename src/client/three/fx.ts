@@ -4,6 +4,7 @@ import type { Observation } from '../../sim/observation';
 import type { Vec } from '../../sim/math';
 import { TUNING } from '../../sim/tuning';
 import { canvasTexture, radialTexture, rand } from './models';
+import { FBM_GLSL, procUniforms } from './materials';
 
 /** Additive cone shader: fades toward the open end and toward silhouette edges, with drifting dust. */
 export function coneMaterial(color: THREE.ColorRepresentation, strength: number): THREE.ShaderMaterial {
@@ -36,40 +37,66 @@ export function coneMaterial(color: THREE.ColorRepresentation, strength: number)
   });
 }
 
+/**
+ * The lamps' amber glow in the mist, baked once: the sum over every lamp of a Gaussian falloff,
+ * one texel per 16 world units. The mist covers the whole screen, and summing 14 lamps per pixel
+ * there cost more than the mist itself.
+ */
+function lampGlowTexture(lamps: Vec[], x0: number, z0: number, w: number, h: number): THREE.DataTexture {
+  const CELL = 16, REACH = 320;
+  const gw = Math.ceil(w / CELL), gh = Math.ceil(h / CELL);
+  const sum = new Float32Array(gw * gh);
+  for (const l of lamps) {
+    const c0 = Math.max(0, Math.floor((l.x - REACH - x0) / CELL)), c1 = Math.min(gw - 1, Math.ceil((l.x + REACH - x0) / CELL));
+    const r0 = Math.max(0, Math.floor((l.y - REACH - z0) / CELL)), r1 = Math.min(gh - 1, Math.ceil((l.y + REACH - z0) / CELL));
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++) {
+        const dx = x0 + (c + 0.5) * CELL - l.x, dz = z0 + (r + 0.5) * CELL - l.y;
+        sum[r * gw + c]! += Math.exp(-(dx * dx + dz * dz) / 9000);
+      }
+  }
+  const data = new Uint16Array(gw * gh);
+  for (let i = 0; i < sum.length; i++) data[i] = THREE.DataUtils.toHalfFloat(sum[i]!);
+  const tex = new THREE.DataTexture(data, gw, gh, THREE.RedFormat, THREE.HalfFloatType);
+  tex.unpackAlignment = 1; // one 2-byte channel: rows are not a multiple of 4 bytes when the width is odd
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** A flat sheet of drifting ground mist, lit amber near lamps. */
 export class Mist {
   readonly mesh: THREE.Mesh;
   private mat: THREE.ShaderMaterial;
   constructor(scene: THREE.Scene, lamps: Vec[], w: number, h: number) {
-    const n = Math.max(1, lamps.length);
-    const pts = lamps.length ? lamps.map((l) => new THREE.Vector2(l.x, l.y)) : [new THREE.Vector2(-9999, -9999)];
+    const W = w + 1800, H = h + 1800;
     this.mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      uniforms: { uTime: { value: 0 }, uLamps: { value: pts } },
+      uniforms: {
+        uTime: procUniforms.uTime,
+        uFbm: procUniforms.uFbm,
+        uGlow: { value: lampGlowTexture(lamps, -900, -900, W, H) },
+        uGlowRect: { value: new THREE.Vector4(-900, -900, 1 / W, 1 / H) },
+      },
       vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
-        uniform float uTime; uniform vec2 uLamps[${n}]; varying vec3 vW;
-        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
-        float nz(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
-        float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*nz(p); p=p*2.03+1.7; a*=.5; } return s; }
+        uniform float uTime; uniform sampler2D uFbm; uniform sampler2D uGlow; uniform vec4 uGlowRect; varying vec3 vW;
+        ${FBM_GLSL}
         void main(){
+          // two layers of baked noise drifting across each other
           vec2 p = vW.xz * 0.004;
-          float d = fbm(p + vec2(uTime * 0.02, uTime * 0.012)) * fbm(p * 2.3 - vec2(uTime * 0.03, 0.0));
+          float d = fbmSlow(p + vec2(uTime * 0.02, uTime * 0.012)) * fbmSlow(p * 2.3 - vec2(uTime * 0.03, 0.0));
           float a = smoothstep(0.15, 0.55, d) * 0.32;
-          vec3 c = vec3(0.07, 0.09, 0.10);
-          for (int i = 0; i < ${n}; i++) { float r = length(vW.xz - uLamps[i]); c += vec3(1.0, 0.55, 0.22) * 0.9 * exp(-r * r / 9000.0); }
+          vec3 c = vec3(0.07, 0.09, 0.10) + vec3(1.0, 0.55, 0.22) * 0.9 * texture2D(uGlow, (vW.xz - uGlowRect.xy) * uGlowRect.zw).r;
           gl_FragColor = vec4(c, a);
         }`,
     });
-    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w + 1800, h + 1800), this.mat);
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), this.mat);
     this.mesh.rotation.x = -Math.PI / 2;
     this.mesh.position.set(w / 2, 7, h / 2);
     this.mesh.renderOrder = 2;
     scene.add(this.mesh);
-  }
-  update(t: number): void {
-    this.mat.uniforms.uTime!.value = t;
   }
 }
 
@@ -125,8 +152,12 @@ export class Decals {
     this.scorch.renderOrder = 1;
     scene.add(this.scorch);
   }
+  private tracksTick = -1;
   /** Track stamps come straight from the Observation (only ones the player's team has seen). */
   syncTracks(obs: Observation): void {
+    // the observation only changes with the simulation tick (30 Hz); between ticks nothing moved
+    if (obs.tick === this.tracksTick) return;
+    this.tracksTick = obs.tick;
     const list = obs.tracks;
     const n = Math.min(list.length, 1200);
     for (let i = 0; i < n; i++) {
@@ -137,6 +168,7 @@ export class Decals {
       this.dummy.updateMatrix();
       this.treads.setMatrixAt(i, this.dummy.matrix);
     }
+    if (n === 0 && this.treads.count === 0) return;
     this.treads.count = n;
     this.treads.instanceMatrix.needsUpdate = true;
   }
@@ -181,6 +213,9 @@ export class Sparks {
   private life: Float32Array;
   private geo = new THREE.BufferGeometry();
   private next = 0;
+  private points: THREE.Points;
+  /** Sparks alive after the last update: with none, the pass over the pool and the uploads are skipped. */
+  private live = 0;
   constructor(scene: THREE.Scene, readonly max = 1600) {
     this.pos = new Float32Array(max * 3);
     this.col = new Float32Array(max * 3);
@@ -190,38 +225,60 @@ export class Sparks {
     this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
     const pts = new THREE.Points(this.geo, new THREE.PointsMaterial({ size: 2.6, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, map: radialTexture }));
     pts.frustumCulled = false;
+    pts.visible = false;
     scene.add(pts);
+    this.points = pts;
   }
   burst(x: number, y: number, z: number, dx: number, dz: number, n: number, speed: number): void {
+    const pos = this.pos, vel = this.vel;
     for (let k = 0; k < n; k++) {
-      const i = this.next;
+      const i = this.next, j = i * 3;
       this.next = (this.next + 1) % this.max;
       const a = Math.random() * Math.PI * 2, up = Math.random();
       const sp = speed * (0.3 + Math.random());
-      this.pos.set([x, y, z], i * 3);
-      this.vel.set([Math.cos(a) * sp * 0.6 - dx * sp * 0.6, up * sp * 0.9, Math.sin(a) * sp * 0.6 - dz * sp * 0.6], i * 3);
+      pos[j] = x;
+      pos[j + 1] = y;
+      pos[j + 2] = z;
+      vel[j] = Math.cos(a) * sp * 0.6 - dx * sp * 0.6;
+      vel[j + 1] = up * sp * 0.9;
+      vel[j + 2] = Math.sin(a) * sp * 0.6 - dz * sp * 0.6;
       this.life[i] = 0.3 + Math.random() * 0.5;
     }
+    if (n > 0) this.live = Math.max(this.live, 1);
   }
   update(dt: number): void {
+    // nothing burning: the pool was already blacked out on the frame the last spark died
+    if (this.live === 0) {
+      this.points.visible = false;
+      return;
+    }
+    const pos = this.pos, vel = this.vel, col = this.col, life = this.life;
+    let live = 0;
     for (let i = 0; i < this.max; i++) {
-      const l = this.life[i]!;
+      const l = life[i]!, j = i * 3;
       if (l <= 0) {
-        this.col[i * 3] = this.col[i * 3 + 1] = this.col[i * 3 + 2] = 0;
+        col[j] = col[j + 1] = col[j + 2] = 0;
         continue;
       }
-      this.life[i] = l - dt;
-      this.vel[i * 3 + 1]! -= 420 * dt;
-      for (let k = 0; k < 3; k++) this.pos[i * 3 + k]! += this.vel[i * 3 + k]! * dt;
-      if (this.pos[i * 3 + 1]! < 0.5) {
-        this.pos[i * 3 + 1] = 0.5;
-        this.vel[i * 3 + 1]! *= -0.35;
-        this.vel[i * 3]! *= 0.6;
-        this.vel[i * 3 + 2]! *= 0.6;
+      live++;
+      life[i] = l - dt;
+      vel[j + 1]! -= 420 * dt;
+      pos[j]! += vel[j]! * dt;
+      pos[j + 1]! += vel[j + 1]! * dt;
+      pos[j + 2]! += vel[j + 2]! * dt;
+      if (pos[j + 1]! < 0.5) {
+        pos[j + 1] = 0.5;
+        vel[j + 1]! *= -0.35;
+        vel[j]! *= 0.6;
+        vel[j + 2]! *= 0.6;
       }
       const k = Math.min(1, l * 2.5);
-      this.col.set([6 * k, 2.6 * k * k, 0.6 * k * k * k], i * 3);
+      col[j] = 6 * k;
+      col[j + 1] = 2.6 * k * k;
+      col[j + 2] = 0.6 * k * k * k;
     }
+    this.live = live;
+    this.points.visible = true;
     this.geo.attributes.position!.needsUpdate = true;
     this.geo.attributes.color!.needsUpdate = true;
   }
@@ -265,6 +322,8 @@ export class SmokeFx {
   private puffs: THREE.Mesh[] = [];
   private clouds = new Map<number, Plume>();
   private plumes: Plume[] = [];
+  /** Puffs shown last frame (the rest of the pool is already hidden). */
+  private used = 0;
   static readonly PER = 30;
   constructor(scene: THREE.Scene, max = 8) {
     const geo = new THREE.PlaneGeometry(1, 1);
@@ -272,6 +331,7 @@ export class SmokeFx {
       const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xa3a8a4, alphaMap: puffTex, transparent: true, depthWrite: false }));
       m.visible = false;
       m.renderOrder = 3;
+      m.matrixAutoUpdate = false; // 240 pooled billboards: only the ones on screen get a matrix (in update)
       scene.add(m);
       this.puffs.push(m);
     }
@@ -316,6 +376,7 @@ export class SmokeFx {
         m.rotateZ(rnd() * 6 + c.t * (rnd() - 0.5) * 0.4);
         const grow = column ? 0.4 + rise / 140 : (0.6 + 0.4 * Math.min(1, c.t)) * (0.7 + rnd() * 0.6);
         m.scale.setScalar((column ? 46 : c.radius) * grow);
+        m.updateMatrix();
         const mat = m.material as THREE.MeshLambertMaterial;
         mat.opacity = alpha * (column ? 1 - rise / 160 : 1);
         mat.color.setHex(c.dark ? 0x3a3a38 : 0xa3a8a4);
@@ -323,7 +384,9 @@ export class SmokeFx {
     };
     for (const c of this.clouds.values()) draw(c, false);
     for (const p of this.plumes) draw(p, true);
-    for (; pi < this.puffs.length; pi++) this.puffs[pi]!.visible = false;
+    const used = pi;
+    for (; pi < this.used; pi++) this.puffs[pi]!.visible = false;
+    this.used = used;
   }
 }
 
@@ -342,8 +405,9 @@ export class Rain {
     scene.add(this.lines);
   }
   update(dt: number, cx: number, cz: number): void {
-    const wind = 40;
-    this.drops.forEach((d, i) => {
+    const wind = 40, pos = this.pos, drops = this.drops;
+    for (let i = 0, j = 0; i < drops.length; i++, j += 6) {
+      const d = drops[i]!;
       d.y -= d.v * dt;
       d.x += wind * dt;
       if (d.y < 0) {
@@ -352,8 +416,13 @@ export class Rain {
         d.z = Math.random() * 1400 - 700;
       }
       const x = cx + d.x, z = cz + d.z;
-      this.pos.set([x, d.y, z, x - wind * 0.02, d.y + 14, z], i * 6);
-    });
+      pos[j] = x;
+      pos[j + 1] = d.y;
+      pos[j + 2] = z;
+      pos[j + 3] = x - wind * 0.02;
+      pos[j + 4] = d.y + 14;
+      pos[j + 5] = z;
+    }
     this.lines.geometry.attributes.position!.needsUpdate = true;
   }
 }

@@ -10,10 +10,102 @@
 //   - micro bump: the noise gradient tilts the normal, so light rakes across pitted concrete
 import * as THREE from 'three';
 
+/**
+ * The lattice for every value-noise lookup in the surface, ground and mist shaders: 256x256 random
+ * bytes, tiling, bilinear. One filtered fetch at a smoothstepped coordinate *is* 2D value noise;
+ * for 3D noise the green channel holds the red one shifted by (37, 17), so the same fetch returns
+ * two neighbouring z-slices to blend (Quilez). The arithmetic it replaces hashed 4 (2D) or 8 (3D)
+ * lattice corners per octave: about 100 hashes per pixel on concrete, 90 on the ground.
+ * Blue is a second, independent field.
+ */
+export const NOISE_SIZE = 256;
+function buildNoiseTexture(): THREE.DataTexture {
+  const n = NOISE_SIZE;
+  let seed = 20261;
+  const r = () => ((seed = (seed * 16807) % 2147483647) >>> 8) & 255;
+  const red = new Uint8Array(n * n);
+  for (let i = 0; i < n * n; i++) red[i] = r();
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const i = (y * n + x) * 4;
+      data[i] = red[y * n + x]!;
+      data[i + 1] = red[((y + 17) % n) * n + ((x + 37) % n)]!;
+      data[i + 2] = r();
+      data[i + 3] = 255;
+    }
+  const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Four octaves of value noise, summed and baked into one tiling texture, for the fields that vary
+ * slowly across the screen (puddles, worn ground, the mist): one fetch instead of four, and smooth
+ * on any GPU, since a texel is only a few pixels wide however far the player zooms in. (The lattice
+ * texture above would be magnified hundreds of pixels per cell there, where the filter's 8-bit
+ * weights start to show as steps.) Spans `FBM_CELLS` base cells per side, 16 texels per cell.
+ */
+export const FBM_CELLS = 32;
+function buildFbmTexture(): THREE.DataTexture {
+  const n = FBM_CELLS * 16;
+  let seed = 7919;
+  const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const sum = new Float32Array(n * n);
+  for (let o = 0, amp = 0.5; o < 4; o++, amp *= 0.5) {
+    const cells = FBM_CELLS << o; // lattice period = the texture, so it tiles
+    const lat = new Float32Array(cells * cells);
+    for (let i = 0; i < lat.length; i++) lat[i] = r();
+    const k = cells / n;
+    for (let y = 0; y < n; y++) {
+      const fy = (y + 0.5) * k, y0 = Math.floor(fy), ty = fy - y0, sy = ty * ty * (3 - 2 * ty);
+      const r0 = (y0 % cells) * cells, r1 = ((y0 + 1) % cells) * cells;
+      for (let x = 0; x < n; x++) {
+        const fx = (x + 0.5) * k, x0 = Math.floor(fx), tx = fx - x0, sx = tx * tx * (3 - 2 * tx);
+        const c0 = x0 % cells, c1 = (x0 + 1) % cells;
+        const a = lat[r0 + c0]! + (lat[r0 + c1]! - lat[r0 + c0]!) * sx;
+        const b = lat[r1 + c0]! + (lat[r1 + c1]! - lat[r1 + c0]!) * sx;
+        sum[y * n + x]! += amp * (a + (b - a) * sy);
+      }
+    }
+  }
+  const data = new Uint8Array(n * n);
+  for (let i = 0; i < data.length; i++) data[i] = Math.round(sum[i]! * 255);
+  const tex = new THREE.DataTexture(data, n, n, THREE.RedFormat);
+  tex.unpackAlignment = 1;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export const procUniforms = {
   uProcOn: { value: 1 },
   uTime: { value: 0 },
+  uNoise: { value: buildNoiseTexture() },
+  uFbm: { value: buildFbmTexture() },
 };
+
+/** GLSL: baked 4-octave noise at `p` in base cells (declare `uniform sampler2D uFbm` first). */
+export const FBM_GLSL = /* glsl */ `
+float fbmSlow(vec2 p) { return texture2D(uFbm, p / ${FBM_CELLS}.0).r; }
+`;
+
+/** GLSL: 2D value noise from the shared lattice texture (declare `uniform sampler2D uNoise` first). */
+export const NOISE2D_GLSL = /* glsl */ `
+float vnoise2(vec2 p) { vec2 i = floor(p), f = fract(p); return textureLod(uNoise, (i + f * f * (3.0 - 2.0 * f) + 0.5) / ${NOISE_SIZE}.0, 0.0).r; }
+`;
+
+// three.js runs the whole surface BRDF for every light on every pixel, in or out of its reach, and
+// most of our lights are pooled: 12 spots and 3 point lights of which a pixel sees one or two.
+// Lights that don't reach a pixel (outside the cone or range, or parked at intensity 0) already
+// report `visible = false`; skipping them there changes nothing in the picture.
+const RE_DIRECT = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+export const LIGHT_SKIP = `if ( directLight.visible ) { ${RE_DIRECT} }`;
+if (!THREE.ShaderChunk.lights_fragment_begin.includes(LIGHT_SKIP))
+  THREE.ShaderChunk.lights_fragment_begin = THREE.ShaderChunk.lights_fragment_begin.split(RE_DIRECT).join(LIGHT_SKIP);
 
 export enum Surface {
   Concrete = 0,
@@ -27,14 +119,15 @@ export enum Surface {
 const NOISE = /* glsl */ `
 uniform float uProcOn;
 uniform float uTime;
+uniform sampler2D uNoise;
 varying vec3 vWPos;
 varying vec3 vONrm;
-float h31(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+// 3D value noise in one fetch: red and green are two z-slices of the lattice (see buildNoiseTexture)
 float vnoise(vec3 x) {
   vec3 i = floor(x), f = fract(x);
   f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
-             mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z);
+  vec2 rg = textureLod(uNoise, (i.xy + vec2(37.0, 17.0) * i.z + f.xy + 0.5) / ${NOISE_SIZE}.0, 0.0).rg;
+  return mix(rg.x, rg.y, f.z);
 }
 // Bump mapping from screen-space derivatives (Mikkelsen 2010), as three's bumpmap does.
 vec3 procBump(vec3 n, float h, float faceDir) {
@@ -60,6 +153,7 @@ export function proc<T extends THREE.MeshStandardMaterial>(mat: T, surface: Surf
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uProcOn = procUniforms.uProcOn;
     sh.uniforms.uTime = procUniforms.uTime;
+    sh.uniforms.uNoise = procUniforms.uNoise;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vONrm;')
       .replace(

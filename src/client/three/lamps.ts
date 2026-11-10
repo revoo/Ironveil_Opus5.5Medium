@@ -9,7 +9,7 @@
 //   - shadow maps are drawn once and then only when something that moves (a tank, a wreck, flying
 //     debris) is under that lamp, or the light was just moved to another lamp. Scenery never moves.
 import * as THREE from 'three';
-import { LAMP_HEIGHT, type LampView } from './models';
+import { LAMP_HEIGHT, SHADOW_DYNAMIC_LAYER, SHADOW_LAYER, type LampView } from './models';
 
 export const LAMP_INTENSITY = 320000;
 const SHADOWED = 6;
@@ -42,6 +42,8 @@ export class LampLights {
       s.shadow.bias = -0.0006;
       s.shadow.normalBias = 0.6;
       s.shadow.camera.near = 8;
+      s.shadow.camera.layers.enable(SHADOW_LAYER);
+      s.shadow.camera.layers.enable(SHADOW_DYNAMIC_LAYER);
       s.shadow.autoUpdate = false;
       s.shadow.needsUpdate = true;
       scene.add(s, s.target);

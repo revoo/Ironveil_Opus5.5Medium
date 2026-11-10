@@ -23,7 +23,7 @@ export interface FrameCost {
   /** Simulation ticks run this frame and the time they took. */
   ticks: number;
   simMs: number;
-  /** CPU time spent issuing the composer render (not GPU execution time). */
+  /** CPU time spent issuing the render passes (not GPU execution time). */
   renderMs: number;
   /** HUD, minimap and audio direction. */
   hudMs: number;
@@ -62,7 +62,7 @@ export class Telemetry {
     const gl = renderer.getContext();
     this.gl = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext ? gl : null;
     this.timer = (this.gl?.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null) ?? null;
-    // The composer renders several passes per frame: count them all, reset once per frame.
+    // A frame is several passes (shadows, scene, post): count them all, reset once per frame.
     renderer.info.autoReset = false;
 
     this.el = document.createElement('div');
@@ -124,7 +124,7 @@ export class Telemetry {
     this.prevNow = -1;
   };
 
-  /** Wrap the GPU work of the frame (the composer render). */
+  /** Wrap the GPU work of the frame (shadow maps, scene, post chain). */
   gpuBegin(): void {
     if (!shown || !this.gl || !this.timer || this.active || this.pending.length > 4) return;
     const q = this.gl.createQuery();

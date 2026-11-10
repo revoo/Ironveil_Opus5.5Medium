@@ -27,6 +27,8 @@ const ICON = {
 };
 
 const RING = 2 * Math.PI * 17;
+/** Circumference of the suspicion arc around an enemy's "?". */
+const MARK_RING = 2 * Math.PI * 11;
 /** How long a bark callout stays up (ticks), and its fade-out at the end. */
 const BARK_TICKS = 30 * 2.8;
 const BARK_FADE = 30 * 0.5;
@@ -38,13 +40,17 @@ function esc(s: string): string {
 export class Hud3D {
   readonly root: HTMLDivElement;
   private q = <T extends Element>(sel: string) => this.root.querySelector(sel) as T;
+  /** Elements touched every frame, looked up once. */
+  private el!: Record<'det' | 'detLbl' | 'detBar' | 'status' | 'hullNum' | 'smoke' | 'smokeEm' | 'silent' | 'brush' | 'cursor' | 'gun' | 'gunFill' | 'gunDmg' | 'gunSt' | 'cd' | 'choice' | 'markers' | 'barks' | 'hint', HTMLElement>;
+  private arc!: SVGCircleElement;
   private objKey = '';
   private toastKey = '';
   private choiceKey = '';
-  private markerKey = '';
   private hint = 0;
   private hullSegs: HTMLElement[] = [];
   private bubbles = new Map<number, HTMLElement>();
+  /** Enemy markers, one element per enemy, rebuilt only when its kind changes (?, !, health bar). */
+  private marks = new Map<number, { el: HTMLDivElement; shape: string; arc: SVGCircleElement | null; hp: HTMLElement | null; trail: HTMLElement | null; fill: HTMLElement | null }>();
   /** Per enemy: when we last saw it hit (performance.now ms) and the trailing "lost health" value. */
   private hits = new Map<number, { at: number; trail: number }>();
 
@@ -77,7 +83,21 @@ export class Hud3D {
     host.appendChild(this.root);
     this.q<HTMLElement>('.h3-title').textContent = session.def.title.replace(/^Grey Box:\s*/i, '');
     this.hullSegs = [...this.root.querySelectorAll<HTMLElement>('.hull .segs b')];
-    (this.q<SVGCircleElement>('.arc') as SVGCircleElement).style.strokeDasharray = `${RING}`;
+    this.arc = this.q<SVGCircleElement>('.arc');
+    this.arc.style.strokeDasharray = `${RING}`;
+    const h = (sel: string) => this.q<HTMLElement>(sel);
+    this.el = {
+      det: h('.h3-det'), detLbl: h('.h3-det .lbl'), detBar: h('.h3-det .track i'),
+      status: h('.h3-status'), hullNum: h('.hull .num'),
+      smoke: h('.chip.smoke'), smokeEm: h('.chip.smoke em'), silent: h('.chip.silent'), brush: h('.chip.brush'),
+      cursor: h('.h3-cursor'), gun: h('.h3-status .gun'), gunFill: h('.gun .fill'), gunDmg: h('.gun .dmg b'), gunSt: h('.gun .st'), cd: h('.h3-cursor .cd'),
+      choice: h('.h3-choice'), markers: h('.h3-markers'), barks: h('.h3-barks'), hint: h('.h3-hint'),
+    };
+  }
+
+  /** Write text only when it changed: an unchanged write still dirties layout. */
+  private text(el: HTMLElement, s: string): void {
+    if (el.textContent !== s) el.textContent = s;
   }
 
   dispose(): void {
@@ -86,7 +106,7 @@ export class Hud3D {
 
   /** Flash the hit marker on the cursor; a kill makes it red and bigger. */
   hitMark(kill: boolean): void {
-    const c = this.q<HTMLElement>('.h3-cursor');
+    const c = this.el.cursor;
     c.classList.remove('hit', 'kill');
     void c.offsetWidth; // restart the animation
     c.classList.add(kill ? 'kill' : 'hit');
@@ -116,12 +136,12 @@ export class Hud3D {
     // ---- detection
     const det = s.detection();
     const state = det >= 1 ? 'spotted' : det > 0.6 ? 'alert' : det > 0.05 ? 'suspicious' : 'hidden';
-    const detEl = this.q<HTMLElement>('.h3-det');
-    if (detEl.dataset.s !== state) {
-      detEl.dataset.s = state;
-      this.q('.h3-det .lbl').textContent = { hidden: 'Hidden', suspicious: 'Suspicious', alert: 'Alert', spotted: 'Spotted' }[state];
+    const E = this.el;
+    if (E.det.dataset.s !== state) {
+      E.det.dataset.s = state;
+      E.detLbl.textContent = { hidden: 'Hidden', suspicious: 'Suspicious', alert: 'Alert', spotted: 'Spotted' }[state];
     }
-    this.q<HTMLElement>('.h3-det .track i').style.transform = `scaleX(${det.toFixed(3)})`;
+    E.detBar.style.transform = `scaleX(${det.toFixed(3)})`;
 
     // ---- toasts (checkpoint, objective changes)
     const toasts = s.notices.filter((n) => tick - n.tick < 30 * 3.5);
@@ -132,23 +152,22 @@ export class Hud3D {
     }
 
     // ---- vehicle status
-    const status = this.q<HTMLElement>('.h3-status');
+    const status = E.status;
     this.root.classList.toggle('dead', !me);
     if (me) {
       const hp = Math.max(0, me.hp);
       this.hullSegs.forEach((b, i) => b.classList.toggle('on', hp > i * 10));
-      this.q('.hull .num').textContent = String(Math.ceil(hp));
+      this.text(E.hullNum, String(Math.ceil(hp)));
       status.classList.toggle('low', hp <= 30);
       const smokeLeft = Math.max(0, (me.smokeReadyTick - tick) / 30);
-      const sm = this.q<HTMLElement>('.chip.smoke');
-      sm.classList.toggle('ready', smokeLeft <= 0);
-      sm.querySelector('em')!.textContent = smokeLeft > 0 ? `${Math.ceil(smokeLeft)}s` : 'Q';
-      this.q<HTMLElement>('.chip.silent').classList.toggle('on', me.quiet);
-      this.q<HTMLElement>('.chip.brush').classList.toggle('on', me.inBrush);
+      E.smoke.classList.toggle('ready', smokeLeft <= 0);
+      this.text(E.smokeEm, smokeLeft > 0 ? `${Math.ceil(smokeLeft)}s` : 'Q');
+      E.silent.classList.toggle('on', me.quiet);
+      E.brush.classList.toggle('on', me.inBrush);
     }
 
     // ---- cursor: cannon ring
-    const cur$ = this.q<HTMLElement>('.h3-cursor');
+    const cur$ = E.cursor;
     cur$.style.transform = `translate(${mouse.x}px, ${mouse.y}px)`;
     if (me) {
       let frac = 1;
@@ -163,27 +182,28 @@ export class Hud3D {
         frac = 1 - me.weaponTimer / (me.phase === 'vent' ? WEAPON_TICKS.vent : WEAPON_TICKS.cancel);
         mode = me.phase === 'vent' ? 'vented' : 'reload';
       }
-      cur$.dataset.m = mode;
-      (cur$.querySelector('.arc') as SVGCircleElement).style.strokeDashoffset = String(RING * (1 - Math.max(0, Math.min(1, frac))));
+      if (cur$.dataset.m !== mode) cur$.dataset.m = mode;
+      this.arc.style.strokeDashoffset = String(RING * (1 - Math.max(0, Math.min(1, frac))));
 
       // ---- cannon gauge and the shot's promise: damage, burst, and whether it kills what you aim at
       const charging = me.phase === 'charging';
       const c = charging ? me.charge : 0;
       const dmg = shotStats(c).damage;
       const burst = c >= TUNING.cannon.splashFrom;
-      const gun = this.q<HTMLElement>('.h3-status .gun');
-      gun.dataset.m = mode;
+      const gun = E.gun;
+      if (gun.dataset.m !== mode) gun.dataset.m = mode;
       gun.classList.toggle('burst', burst);
-      const fill = this.q<HTMLElement>('.gun .fill');
-      fill.style.transform = `scaleX(${(charging ? c : me.phase === 'ready' ? 0 : Math.max(0, Math.min(1, frac))).toFixed(3)})`;
-      this.q('.gun .dmg b').textContent = String(dmg);
+      E.gunFill.style.transform = `scaleX(${(charging ? c : me.phase === 'ready' ? 0 : Math.max(0, Math.min(1, frac))).toFixed(3)})`;
+      this.text(E.gunDmg, String(dmg));
       const holdLeft = me.hold !== null ? me.hold / 30 : 0;
-      this.q('.gun .st').textContent =
+      this.text(
+        E.gunSt,
         mode === 'ready' ? 'Ready'
         : mode === 'charging' ? (burst ? 'Charging · burst' : 'Charging')
         : mode === 'hold' || mode === 'venting' ? `Full · release ${holdLeft.toFixed(1)}s`
         : mode === 'vented' ? 'Vented'
-        : `Reloading ${(me.weaponTimer / 30).toFixed(1)}s`;
+        : `Reloading ${(me.weaponTimer / 30).toFixed(1)}s`,
+      );
       // the enemy under the cursor, if any
       let target: TankView | undefined;
       let best = 46;
@@ -195,15 +215,13 @@ export class Hud3D {
       const lethal = !!target && (charging || me.phase === 'ready') && dmg >= target.hp;
       cur$.classList.toggle('lethal', lethal);
       cur$.classList.toggle('charging', charging && c > 0.05);
-      const cd = this.q<HTMLElement>('.h3-cursor .cd');
-      const label = lethal ? `LETHAL · ${dmg}` : charging && c > 0.05 ? `${dmg}${burst ? ' · burst' : ''}` : '';
-      if (cd.textContent !== label) cd.textContent = label;
+      this.text(E.cd, lethal ? `LETHAL · ${dmg}` : charging && c > 0.05 ? `${dmg}${burst ? ' · burst' : ''}` : '');
     }
 
     // ---- decisions
     const c = s.choice;
     const ck = c ? c.prompt + c.startedTick : '';
-    const choice = this.q<HTMLElement>('.h3-choice');
+    const choice = E.choice;
     if (ck !== this.choiceKey) {
       this.choiceKey = ck;
       choice.classList.toggle('show', !!c);
@@ -221,7 +239,7 @@ export class Hud3D {
     }
 
     // ---- markers over visible enemies
-    let mk = '';
+    const shown = new Set<number>();
     for (const t of cur.tanks) {
       if (t.team === cur.team || !t.alive) continue;
       const p = project(t.x, t.y, 64);
@@ -235,37 +253,58 @@ export class Hud3D {
       else if (st === 'searching' || st === 'suspicious' || sus > 0.05) [cls, glyph] = ['sus', '?'];
       // health bar once damaged: bright for a few seconds after a hit, then a quiet reminder
       const frac = Math.max(0, t.hp / t.maxHp);
-      let bar = '';
-      if (frac < 1) {
+      const bar = frac < 1;
+      if (!glyph && !bar) continue;
+      shown.add(t.id);
+      let m = this.marks.get(t.id);
+      if (!m) {
+        m = { el: document.createElement('div'), shape: '', arc: null, hp: null, trail: null, fill: null };
+        E.markers.appendChild(m.el);
+        this.marks.set(t.id, m);
+      }
+      const low = bar && frac <= 0.34;
+      const shape = `${cls}|${glyph}|${bar ? (low ? 'low' : 'bar') : ''}`;
+      if (m.shape !== shape) {
+        m.shape = shape;
+        m.el.className = `mk ${cls}`;
+        const arc = cls === 'sus' ? `<svg viewBox="-14 -14 28 28"><circle r="11" class="t"/><circle r="11" class="a" transform="rotate(-90)" style="stroke-dasharray:${MARK_RING.toFixed(1)}"/></svg>` : '';
+        m.el.innerHTML = `${glyph ? `${arc}<span>${glyph}</span>` : ''}${bar ? `<div class="hp${low ? ' low' : ''}"><i class="trail"></i><i class="fill"></i></div>` : ''}`;
+        m.arc = m.el.querySelector<SVGCircleElement>('.a');
+        m.hp = m.el.querySelector<HTMLElement>('.hp');
+        m.trail = m.el.querySelector<HTMLElement>('.trail');
+        m.fill = m.el.querySelector<HTMLElement>('.fill');
+      }
+      m.el.style.transform = `translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)`;
+      if (m.arc) m.arc.style.strokeDashoffset = (MARK_RING * (1 - sus)).toFixed(1);
+      if (m.hp && m.trail && m.fill) {
         const h = this.hits.get(t.id) ?? { at: 0, trail: frac };
         h.trail = Math.max(frac, h.trail - dt * 0.6);
         this.hits.set(t.id, h);
         const since = (performance.now() - h.at) / 1000;
-        const op = since < 2.5 ? 1 : Math.max(0.4, 1 - (since - 2.5) / 1.5);
-        bar = `<div class="hp${frac <= 0.34 ? ' low' : ''}" style="opacity:${op.toFixed(2)}"><i class="trail" style="width:${(h.trail * 100).toFixed(1)}%"></i><i class="fill" style="width:${(frac * 100).toFixed(1)}%"></i></div>`;
+        m.hp.style.opacity = (since < 2.5 ? 1 : Math.max(0.4, 1 - (since - 2.5) / 1.5)).toFixed(2);
+        m.trail.style.width = `${(h.trail * 100).toFixed(1)}%`;
+        m.fill.style.width = `${(frac * 100).toFixed(1)}%`;
       }
-      if (!glyph && !bar) continue;
-      const arc = cls === 'sus' ? `<svg viewBox="-14 -14 28 28"><circle r="11" class="t"/><circle r="11" class="a" transform="rotate(-90)" style="stroke-dasharray:${(2 * Math.PI * 11).toFixed(1)};stroke-dashoffset:${(2 * Math.PI * 11 * (1 - sus)).toFixed(1)}"/></svg>` : '';
-      mk += `<div class="mk ${cls}" style="transform:translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)">${glyph ? `${arc}<span>${glyph}</span>` : ''}${bar}</div>`;
     }
-    if (mk !== this.markerKey) {
-      this.markerKey = mk;
-      this.q('.h3-markers').innerHTML = mk;
-    }
+    for (const [id, m] of this.marks)
+      if (!shown.has(id)) {
+        m.el.remove();
+        this.marks.delete(id);
+      }
 
     // ---- barks: callouts over the enemy that spoke, only while that enemy is visible
     this.updateBarks(cur, project);
 
     // ---- first-seconds hint
     this.hint += dt;
-    this.q<HTMLElement>('.h3-hint').style.opacity = String(this.hint < 12 ? 1 : Math.max(0, 1 - (this.hint - 12) / 1.5));
+    if (this.hint < 14) E.hint.style.opacity = String(this.hint < 12 ? 1 : Math.max(0, 1 - (this.hint - 12) / 1.5));
   }
 
   private updateBarks(cur: Observation, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }): void {
     const tick = cur.tick;
     const latest = new Map<number, (typeof this.session.barks)[number]>();
     for (const b of this.session.barks) if (b.tick <= tick && tick - b.tick < BARK_TICKS) latest.set(b.unit, b);
-    const host = this.q<HTMLElement>('.h3-barks');
+    const host = this.el.barks;
     const seen = new Set<number>();
     for (const [unit, b] of latest) {
       // Observation only: a hidden or dead speaker shows nothing.

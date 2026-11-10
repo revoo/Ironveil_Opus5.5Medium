@@ -4,10 +4,10 @@
 import * as THREE from 'three';
 import { Terrain, tileAt } from '../../sim/map';
 import type { Level } from '../../level/load';
-import { procUniforms } from './materials';
+import { FBM_GLSL, NOISE2D_GLSL, NOISE_SIZE, procUniforms } from './materials';
 import { dressBooth, dressBuilding } from './signs';
-import { barrel, barrier, building, bushGeometries, ChunkMerger, lamp, makeMaterials, mergeStatic, rand, railcar, wallRun, windowsMesh, type LampView, type WindowInstance } from './models';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { roundedBox } from './geometry';
+import { barrel, barrier, building, bushGeometries, ChunkMerger, lamp, makeMaterials, mergeStatic, rand, railcar, ShadowProxies, wallRun, windowsMesh, type LampView, type WindowInstance } from './models';
 
 export interface BuiltWorld {
   lamps: LampView[];
@@ -42,11 +42,12 @@ const GROUND_GLSL = /* glsl */ `
 uniform sampler2D uTerrain;
 uniform vec2 uMapSize;
 uniform float uProcOn;
+uniform sampler2D uNoise;
+uniform sampler2D uFbm;
 varying vec3 vGW;
-float gh(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-float gn(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(gh(i), gh(i + vec2(1, 0)), u.x), mix(gh(i + vec2(0, 1)), gh(i + vec2(1, 1)), u.x), u.y); }
-float gfbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * gn(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
+${NOISE2D_GLSL}
+${FBM_GLSL}
+float gfbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise2(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
 // Offset-row cobblestones: x = stone height (0 in the gaps), y = per-stone random.
 vec2 cobble(vec2 p) {
   vec2 cs = vec2(9.0, 7.0);
@@ -56,20 +57,21 @@ vec2 cobble(vec2 p) {
   vec2 f = q - (cell + 0.5) * cs;
   vec2 d2 = abs(f) - (cs * 0.5 - 1.5);
   float d = length(max(d2, 0.0)) + min(max(d2.x, d2.y), 0.0) - 1.0;
-  return vec2(smoothstep(0.8, -1.4, d) * (0.7 + 0.3 * gh(cell)), gh(cell + 7.0));
+  vec2 rnd = textureLod(uNoise, (cell + 0.5) / ${NOISE_SIZE}.0, 0.0).rb;   // two randoms per stone
+  return vec2(smoothstep(0.8, -1.4, d) * (0.7 + 0.3 * rnd.x), rnd.y);
 }
 vec4 weights(vec2 p) {
   vec2 uv = vec2(p.x / uMapSize.x, 1.0 - p.y / uMapSize.y);
   if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec4(0.0, 0.0, 0.0, 0.25);
   // jitter the lookup a little so tile borders wobble instead of running dead straight
-  vec2 j = (vec2(gn(p * 0.09), gn(p * 0.09 + 5.0)) - 0.5) * 9.0 / uMapSize;
+  vec2 q = p * 0.09, i = floor(q), f = fract(q);
+  vec2 j = (textureLod(uNoise, (i + f * f * (3.0 - 2.0 * f) + 0.5) / ${NOISE_SIZE}.0, 0.0).rb - 0.5) * 9.0 / uMapSize;
   return texture2D(uTerrain, uv + j);
 }
-float groundHeight(vec2 p, vec4 w) {
+float groundHeight(vec2 p, vec4 w, float stone) {
   float grass = gfbm(p * 0.25) * 0.6;
-  float road = cobble(p).x;
   float mud = gfbm(p * 0.08) * 0.4;
-  return mix(grass, road * 1.4, w.r) * (1.0 - w.g) + mud * w.g;
+  return mix(grass, stone * 1.4, w.r) * (1.0 - w.g) + mud * w.g;
 }
 `;
 
@@ -81,6 +83,8 @@ function groundMaterial(level: Level): THREE.MeshStandardMaterial {
     sh.uniforms.uTerrain = { value: tex };
     sh.uniforms.uMapSize = { value: size };
     sh.uniforms.uProcOn = procUniforms.uProcOn;
+    sh.uniforms.uNoise = procUniforms.uNoise;
+    sh.uniforms.uFbm = procUniforms.uFbm;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -92,9 +96,9 @@ function groundMaterial(level: Level): THREE.MeshStandardMaterial {
         vec2 P = vGW.xz;
         vec4 W = weights(P);
         vec2 cb = cobble(P);
-        float n1 = gfbm(P * 0.02), n2 = gfbm(P * 0.11 + 3.0);
+        float n1 = fbmSlow(P * 0.02), n2 = gfbm(P * 0.11 + 3.0);
         vec3 grass = mix(vec3(0.085, 0.13, 0.095), vec3(0.15, 0.19, 0.12), n1) * (0.85 + 0.3 * n2);
-        grass = mix(grass, vec3(0.16, 0.14, 0.10), smoothstep(0.55, 0.75, gfbm(P * 0.013 + 9.0)) * 0.6); // worn dirt
+        grass = mix(grass, vec3(0.16, 0.14, 0.10), smoothstep(0.55, 0.75, fbmSlow(P * 0.013 + 9.0)) * 0.6); // worn dirt
         vec3 stone = mix(vec3(0.30, 0.29, 0.26), vec3(0.42, 0.40, 0.35), cb.y);
         vec3 road = mix(vec3(0.07, 0.08, 0.06), stone, smoothstep(0.05, 0.4, cb.x));
         road *= 0.85 + 0.25 * n1;
@@ -106,7 +110,7 @@ function groundMaterial(level: Level): THREE.MeshStandardMaterial {
         c = mix(c, mud, W.g);
         c = mix(c, brushG, W.b);
         c = mix(c, conc, W.a);
-        float puddle = smoothstep(0.55, 0.62, gfbm(P * 0.0065 + 3.1)) * (W.r + W.g * 1.4);
+        float puddle = smoothstep(0.55, 0.62, fbmSlow(P * 0.0065 + 3.1)) * (W.r + W.g * 1.4);
         float wet = clamp(puddle + W.g * 0.35, 0.0, 1.0);
         c = mix(c, c * 0.45, puddle);
         diffuseColor.rgb = c;`,
@@ -123,7 +127,7 @@ function groundMaterial(level: Level): THREE.MeshStandardMaterial {
         `#include <normal_fragment_maps>
         if (uProcOn > 0.5) {
           // cobbles and turf as a height field; slope from screen-space derivatives (Mikkelsen)
-          float h = groundHeight(P, W) * 1.3 * (1.0 - puddle);
+          float h = groundHeight(P, W, cb.x) * 1.3 * (1.0 - puddle);
           vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
           vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
           float det = dot(sx, r1) * faceDirection;
@@ -177,6 +181,7 @@ export function buildWorld(scene: THREE.Scene, level: Level): BuiltWorld {
   const T = map.tile;
   const m = makeMaterials();
   const staticRoot = new THREE.Group();
+  const shadows = new ShadowProxies();
 
   // ---- ground
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(map.width + MARGIN * 2, map.height + MARGIN * 2), groundMaterial(level));
@@ -233,7 +238,7 @@ export function buildWorld(scene: THREE.Scene, level: Level): BuiltWorld {
   for (let rr = 0; rr < map.rows; rr++)
     for (let c = 0; c < map.cols; c++)
       if (tileAt(map, c, rr) === Terrain.Brush) bushGeometries((c + 0.5) * T, (rr + 0.5) * T, T, rr * 1000 + c).forEach((g, i) => ((i + c + rr) % 2 ? bushA : bushB).push(g));
-  const bushes = new ChunkMerger();
+  const bushes = new ChunkMerger(shadows);
   bushA.forEach((g) => bushes.add(g, m.bush));
   bushB.forEach((g) => bushes.add(g, m.bush2));
   bushes.flush(scene);
@@ -257,7 +262,7 @@ export function buildWorld(scene: THREE.Scene, level: Level): BuiltWorld {
         railcar(staticRoot, m, cx, cz, p.w, p.h);
         break;
       default: {
-        const box = new THREE.Mesh(new RoundedBoxGeometry(p.w, p.height ?? 20, p.h, 2, 1.5), m.crate);
+        const box = new THREE.Mesh(roundedBox(p.w, p.height ?? 20, p.h, 2, 1.5), m.crate);
         box.position.set(cx, (p.height ?? 20) / 2, cz);
         box.rotation.y = -rot;
         staticRoot.add(box);
@@ -266,6 +271,7 @@ export function buildWorld(scene: THREE.Scene, level: Level): BuiltWorld {
   });
 
   staticRoot.add(windowsMesh(wins, m.window));
-  mergeStatic(staticRoot, scene);
+  mergeStatic(staticRoot, scene, shadows);
+  shadows.flush(scene);
   return { lamps, ground, width: map.width, height: map.height };
 }

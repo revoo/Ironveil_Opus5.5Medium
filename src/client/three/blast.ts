@@ -6,7 +6,7 @@
 // fight never creates materials or changes the light count mid-game.
 import * as THREE from 'three';
 import type { GlowRequest } from './fx';
-import { canvasTexture, radialTexture, rand } from './models';
+import { canvasTexture, radialTexture, rand, SHADOW_DYNAMIC_LAYER } from './models';
 
 /** What a boom asks of the rest of the view: light, sparks, sound and camera shake. */
 export interface BlastHooks {
@@ -154,6 +154,7 @@ export class Blasts {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       s.visible = false;
       s.renderOrder = 5;
+      s.matrixAutoUpdate = false; // pooled: only live particles get a matrix (in drawParticles)
       scene.add(s);
       this.fireSprites.push(s);
     }
@@ -161,6 +162,7 @@ export class Blasts {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x2b2a28, depthWrite: false, transparent: true }));
       s.visible = false;
       s.renderOrder = 4;
+      s.matrixAutoUpdate = false;
       scene.add(s);
       this.smokeSprites.push(s);
     }
@@ -180,6 +182,7 @@ export class Blasts {
     this.debris.count = 0;
     this.debris.frustumCulled = false;
     this.debris.castShadow = true;
+    this.debris.layers.enable(SHADOW_DYNAMIC_LAYER); // drawn in the view and in the moon's moving-shadow layer
     this.debris.setColorAt(0, new THREE.Color());
     scene.add(this.debris);
   }
@@ -388,7 +391,8 @@ export class Blasts {
       this.debris.setColorAt(n, this.col);
       n++;
     }
-    this.chunks = this.chunks.filter((c) => c.t < c.life);
+    if (this.chunks.length) this.chunks = this.chunks.filter((c) => c.t < c.life);
+    if (n === 0 && this.debris.count === 0) return; // nothing flying, nothing to upload
     this.debris.count = n;
     this.debris.instanceMatrix.needsUpdate = true;
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;
@@ -421,6 +425,7 @@ export class Blasts {
       s.position.set(p.x, p.y, p.z);
       const ease = 1 - (1 - k) * (1 - k);
       s.scale.setScalar(p.s0 + (p.s1 - p.s0) * ease);
+      s.updateMatrix();
       const mat = s.material;
       mat.rotation = p.rot;
       if (p.kind === 'smoke') {
