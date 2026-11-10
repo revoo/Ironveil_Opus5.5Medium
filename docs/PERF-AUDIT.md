@@ -4,6 +4,11 @@ November 2026, branch `perf/audit-pass`. An audit of how `src/client/three/` spe
 was changed as a result, and what is left as suggestions. Decisions are logged as D34–D37 in
 [DECISIONS.md](DECISIONS.md).
 
+**Result (added after the owner's playtest, 2026-11-10):** on the M1 Pro, High, 1314×704 window,
+the game went from 55–65 fps at 60–90% render scale to **120 fps locked at 100%**, with no frame
+over 33 ms in 207 seconds. The forecast below (60 fps at full scale) was too cautious. What to do
+next is in [PERF-PLAN.md](PERF-PLAN.md).
+
 **Read this first:** nothing here was measured on a real GPU. The cloud session renders on the CPU
 (SwiftShader), which says little about an M1. So the audit counts things that are exact on any
 machine (draw calls, triangles, vertices, passes, arithmetic per pixel) and checks the picture by

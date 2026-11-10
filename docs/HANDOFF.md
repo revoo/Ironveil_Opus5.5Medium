@@ -7,7 +7,11 @@ invariants, gotchas), then this page. Last updated: 2026-11-10.
 
 `main` holds everything up to the render-budget pass. **`perf/audit-pass` is pushed but not merged**:
 a performance audit and a second optimisation pass (D34–D37, [PERF-AUDIT.md](PERF-AUDIT.md)). The
-preview artifact runs that branch. It waits for the owner to playtest it and say "merge".
+preview artifact runs that branch. The owner has playtested it (120 fps locked on the M1 Pro, see
+below) but has not yet said "merge".
+
+**Next work is written up as a work order: [PERF-PLAN.md](PERF-PLAN.md).** It is meant to be
+executed task by task, with the harness in `tools/perf/` proving each step.
 
 The most recent work on `main`, all merged by fast-forward:
 
@@ -60,15 +64,12 @@ what was *not* done. In short, per driving frame on The Long Night: draw calls ~
 triangles ~780k → ~300k, vertex-shader runs ~2.3M → ~0.44M, one scene render instead of two,
 6 full-resolution passes instead of 9, and much cheaper lighting and noise per pixel.
 
-**None of it has been measured on the M1.** The cloud session can only count and compare pictures.
-So the first job next session:
-
-1. **Read the next perf-log session** and compare frame time against render scale with the first
-   one (8 ms + 5.4 ms/Mpx). `draws` in the samples should be ~120–200, not 500–980.
-2. If the owner reports anything odd in shadows, puddles, mist or AO, PERF-AUDIT's "What to check"
-   says which change to suspect.
-3. Then pick from PERF-AUDIT's "Suggestions not done". The first one (per-pass GPU timers in the
-   overlay and the perf log) makes every later choice a measured one.
+**Measured on the M1 in the second perf-log session** (`2026-11-10T14-23-57-798Z-xh1y`, High,
+1314×704 window, 207 s): 120 fps locked to the display at 100% render scale, no frame over 33 ms,
+no stutters; draws 97–447 (mean 226), triangles 181k–425k, JS 2.1–4.7 ms a frame. Before: 55–65 fps
+at 60–90% scale. JS time follows draw calls (`cpu ≈ 1.76 + 0.0063 × draws` ms), and a kill doubles
+the draws for half a minute: that, and the lack of any way to see headroom past the display's
+refresh, are where [PERF-PLAN.md](PERF-PLAN.md) starts.
 
 How the pieces fit now (details in CLAUDE.md gotchas):
 
@@ -101,9 +102,9 @@ Keep the artifact's capabilities when republishing. Omitting `capabilities` carr
   - Frame times there are only a relative proxy. Draw and vertex counts (hook `drawElements` and `viewport`) are exact and comparable.
   - Dynamic resolution ignores frames over 250 ms, so it never acts headless.
   - To compare images, freeze it: `v.dynRes.update = () => false; v.dynRes.scale = 1; v.resize()`.
-  - For *exact* comparisons between builds (baseline against itself = 0 difference), see
-    "Reproducing the measurements" in PERF-AUDIT.md: stub rAF and step frames by hand, seed
-    `Math.random`, fix `Date.now`, re-deal the rain.
+  - For *exact* comparisons between builds (baseline against itself = 0 difference), use the
+    scripts in `tools/perf/` (see its README): counts, PASS/FAIL checks, deterministic screenshots
+    and diffs. How they are made exact is in "Reproducing the measurements" in PERF-AUDIT.md.
   - A click that starts a mission blocks for the whole world build and warm-up frame (tens of
     seconds here): trigger it with `page.evaluate(() => el.click())`, not `page.click` with a timeout.
 - **Dev server:** start it detached, or it dies between turns: `setsid nohup npx vite --port 5199 --strictPort > log 2>&1 < /dev/null &`.

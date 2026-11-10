@@ -30,6 +30,7 @@ npm run dev         # http://localhost:5173
 | 2D Skirmish client | `src/client/GameScene.ts`, `hud.ts`, `fx.ts`, `textures.ts` (Phaser) |
 | Audio (all synthesised) | `src/client/audio.ts` (engine, SFX, buses), `src/client/sound/` (music, radio, ambience, `voice.ts` speech synth) |
 | Styles | `src/client/style.css` (menus, then the `.h3` 3D HUD block) |
+| Performance harness (headless, exact counts and picture diffs) | `tools/perf/` (README there) |
 
 ## Invariants (do not break)
 
@@ -113,8 +114,10 @@ measured results, how to read the playtest perf log, and practical notes for clo
 - `main` holds everything; work on short-lived branches off `main`, merge by fast-forward when the
   owner says so. The Render Lab experiment is preserved on the read-only branch
   `archive/poc-render-tech`; its code now lives in `src/client/three/`.
-- **Pushed, awaiting the owner's playtest and "merge": `perf/audit-pass`** (performance audit, D34–D37,
+- **Pushed, playtested, awaiting the owner's "merge": `perf/audit-pass`** (performance audit, D34–D37,
   docs/PERF-AUDIT.md). The preview artifact runs it.
+- **Next performance work is a written work order: docs/PERF-PLAN.md** (not started). The harness that
+  verifies it is `tools/perf/` (counts, PASS/FAIL checks, deterministic screenshots; see its README).
 - **Merged branches are kept as souvenirs** (owner's wish), never deleted: `fix/headlight-shader-recompile`,
   `feat/perf-telemetry`, `feat/enemy-barks`, `feat/demo-level`, `feat/combat-fx`, `feat/charged-shot`,
   `feat/comms-panel`, `feat/vostrava-theme`, `feat/setting-depth`, `perf/render-budget`.
@@ -124,10 +127,10 @@ measured results, how to read the playtest perf log, and practical notes for clo
   setting (D29, docs/SETTING.md) with dressing, choir and crew names, and the render-budget pass (D30–D33).
   Earlier: *The Long Night* and *Night Run*, paced garrison combat, combat feedback, the charged shot (D24–D27).
 - Performance: on the owner's M1 Pro, High went from 15–25 fps to ~60–75 with dynamic resolution.
-  Measure with the playtest perf log, not guesses (see HANDOFF). The audit pass (docs/PERF-AUDIT.md) cut
-  draw calls ~4x and vertex work ~5x per frame and made pixels cheaper, but **its effect on the M1 is not
-  measured yet**: read the next perf-log session first. Not yet verified by a human: the audit pass, the
-  slow-frame dynamic resolution, the warm-up frame against first-fight stutters, the audio mix, combat numbers.
+  Measure with the playtest perf log, not guesses (see HANDOFF). After the audit pass (docs/PERF-AUDIT.md)
+  the owner's playtest ran **120 fps locked at 100% render scale** (1314×704 window), no stutters. At the
+  display's cap the perf log can no longer show headroom: docs/PERF-PLAN.md starts with a benchmark mode
+  for that. Not yet verified by a human: the audio mix, combat numbers.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Candidates for next features: crew system phase 1, Ink dialogue, first real LDtk mission, recorded
   CC0 weapon/engine samples, a crew line when the player takes a heavy hit, steam on a vented cannon.
