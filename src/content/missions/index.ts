@@ -8,6 +8,8 @@ import longNightMission from './long-night.json';
 import longNightLevel from '../levels/long-night.json';
 import nightRunMission from './night-run.json';
 import nightRunLevel from '../levels/night-run.json';
+import roadHomeMission from './road-home.json';
+import roadHomeLevel from '../levels/road-home.json';
 
 export interface MissionEntry {
   mission: MissionDef;
@@ -16,6 +18,7 @@ export interface MissionEntry {
 
 // JSON imports widen string literals, so they are cast here and checked at runtime instead.
 export const MISSIONS: MissionEntry[] = [
+  { mission: roadHomeMission as unknown as MissionDef, level: roadHomeLevel as unknown as LevelData },
   { mission: longNightMission as unknown as MissionDef, level: longNightLevel as unknown as LevelData },
   { mission: nightRunMission as unknown as MissionDef, level: nightRunLevel as unknown as LevelData },
   { mission: greyboxMission as unknown as MissionDef, level: greyboxLevel as unknown as LevelData },

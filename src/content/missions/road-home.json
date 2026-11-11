@@ -1,0 +1,219 @@
+{
+  "id": "road-home",
+  "title": "Demo: The Road Home",
+  "summary": "A quiet drive home through a village that isn't ours any more. It tightens stretch by stretch and ends at the one thing you can't sneak past: the gate garrison.",
+  "level": "road-home",
+  "briefing": "Six years ago the Directorate ran its Wall through the village of Lipovka, turned the villagers out in a single night and billeted its own border clerks in their houses. Sgt. Gromov grew up there. Tonight tank 412 goes home by that road: the old orchard lane, the village, the church, the raked ground, and then the Lipovka gate, which only opens from this side. Nobody guards a sleeping billet closely. The gate is another matter: its garrison has to be broken before anyone drives through.",
+  "playerName": "Ironveil",
+  "alarmRadius": 560,
+  "units": [
+    { "id": "v_sentry", "name": "Street Sentry", "marker": "v_sentry", "ai": "simple", "skill": 0.3 },
+    { "id": "ch_post", "name": "Church Post", "marker": "ch_post", "ai": "simple", "skill": 0.35 },
+    { "id": "ch_walk", "name": "School Patrol", "marker": "ch_walk_start", "ai": "simple", "posture": { "patrol": "ch_walk" }, "skill": 0.4 },
+    { "id": "st_lead", "name": "Strip Patrol 1", "marker": "st_lead", "ai": "simple", "posture": { "patrol": "st_run" }, "skill": 0.45 },
+    { "id": "st_tail", "name": "Strip Patrol 2", "marker": "st_tail", "ai": "simple", "posture": { "patrol": "st_run" }, "skill": 0.45 },
+    { "id": "ow_gate", "name": "Yard Gate", "marker": "ow_gate", "ai": "simple", "skill": 0.5 },
+    { "id": "ow_watch", "name": "Yard Watch", "marker": "ow_watch", "ai": "simple", "skill": 0.5 },
+    { "id": "ow_walk", "name": "Yard Patrol", "marker": "ow_walk_start", "ai": "simple", "posture": { "patrol": "ow_walk" }, "skill": 0.5 },
+    { "id": "g_walk", "name": "Gate Patrol", "marker": "g_walk_start", "ai": "simple", "posture": { "patrol": "g_walk" }, "skill": 0.55 },
+    { "id": "g_post_n", "name": "Gate Post N", "marker": "g_post_n", "ai": "simple", "skill": 0.55 },
+    { "id": "g_post_s", "name": "Gate Post S", "marker": "g_post_s", "ai": "simple", "skill": 0.55 }
+  ],
+  "objectives": [
+    { "id": "o_village", "text": "Follow the old lane into Lipovka" },
+    { "id": "o_cross", "text": "Cross the cleared ground to the gate", "state": "hidden" },
+    { "id": "o_garrison", "text": "Break the gate garrison", "state": "hidden" },
+    { "id": "o_home", "text": "Drive through the gate", "state": "hidden" },
+    { "id": "stay_hidden", "text": "Reach the gate unseen (optional)" }
+  ],
+  "triggers": [
+    {
+      "id": "intro",
+      "when": { "after": 1.5 },
+      "do": [
+        { "radio": "Engine low, Pasha. Six years since one of ours drove this lane.", "from": "Commander" },
+        { "radio": "I know the road, Comrade Lieutenant.", "from": "Driver", "delay": 5.5 }
+      ]
+    },
+    {
+      "id": "lane_bend",
+      "when": { "enter": "lane_bend" },
+      "do": [
+        { "radio": "They emptied the village in one night. Forty minutes to pack, and a form to sign.", "from": "Loader" },
+        { "radio": "And the orchards went on growing. Nobody told them.", "from": "Gunner", "delay": 6 }
+      ]
+    },
+    {
+      "id": "gromov_orchard",
+      "when": { "enter": "gromov_orchard" },
+      "do": [{ "radio": "Father planted these the year I was born. One row for each of us.", "from": "Driver" }]
+    },
+    {
+      "id": "cp_village",
+      "when": { "enter": "z_village" },
+      "do": [
+        { "checkpoint": "cp_village" },
+        { "radio": "Lipovka. Ours was the third house past the pump.", "from": "Driver" },
+        { "radio": "Lights in the windows. The Directorate's border clerks live here now.", "from": "Gunner", "delay": 4.5 },
+        { "radio": "One sentry on the street, half asleep. Lanes run behind the houses, both sides.", "from": "Gunner", "delay": 9.5 }
+      ]
+    },
+    {
+      "id": "pasha_house",
+      "when": { "enter": "pasha_house" },
+      "do": [
+        { "radio": "There's a light on in our kitchen.", "from": "Driver" },
+        { "radio": "Keep her moving, Pasha. We'll come back in daylight.", "from": "Commander", "delay": 4 }
+      ]
+    },
+    {
+      "id": "cp_turn",
+      "when": { "enter": "z_turn" },
+      "do": [
+        { "objective": "o_village", "state": "complete" },
+        { "objective": "o_cross", "state": "active" },
+        { "checkpoint": "cp_turn" },
+        { "repair": true },
+        { "radio": "And there it is. The Wall. Six years old and cracking already. Directorate concrete.", "from": "Loader" },
+        { "radio": "The gate is south, past the church and the cleared ground. Our people can't reach it from the far side. It opens from here, or not at all.", "from": "Commander", "delay": 5.5 }
+      ]
+    },
+    {
+      "id": "church",
+      "when": { "enter": "church_east" },
+      "do": [
+        { "radio": "Two at the church. One by the door, one walking round the school.", "from": "Gunner" },
+        { "radio": "That bell you keep hearing is ours. It carries over the Wall when the wind is right.", "from": "Commander", "delay": 5 },
+        { "radio": "We set the kitchen clock by it.", "from": "Driver", "delay": 10 }
+      ]
+    },
+    {
+      "id": "churchyard",
+      "when": { "enter": "churchyard" },
+      "do": [{ "radio": "Go gently here. These are the only ones they let stay.", "from": "Loader" }]
+    },
+    {
+      "id": "cp_strip",
+      "when": { "enter": "z_strip" },
+      "do": [
+        { "checkpoint": "cp_strip" },
+        { "repair": true },
+        { "radio": "Raked earth. So they can count the footprints in the morning.", "from": "Loader" },
+        { "radio": "Two of theirs on the patrol road, close together. Hedgerow north if we're passing. Old house walls south if we're hunting.", "from": "Gunner", "delay": 4.5 }
+      ]
+    },
+    {
+      "id": "strip_mid",
+      "when": { "enter": "strip_mid" },
+      "do": [
+        { "radio": "I stood on the far bank the night they cleared this. We had orders to watch.", "from": "Commander" },
+        { "radio": "Not tonight, Comrade Lieutenant.", "from": "Gunner", "delay": 5.5 }
+      ]
+    },
+    {
+      "id": "cp_bend",
+      "when": { "enter": "z_bend" },
+      "do": [
+        { "checkpoint": "cp_bend" },
+        { "repair": true },
+        { "radio": "Their supply yard, then the gate. From here they are awake.", "from": "Commander" },
+        { "radio": "A drainage ditch runs under the fence, south side. We used to play in it.", "from": "Driver", "delay": 4.5 }
+      ]
+    },
+    {
+      "id": "works_inside",
+      "when": { "enter": "works_inside" },
+      "do": [{ "radio": "Three in the yard. I can take them or leave them. Say which.", "from": "Gunner" }]
+    },
+    {
+      "id": "spotted",
+      "when": { "all": [{ "alarm": true }, { "not": { "flag": "at_gate" } }] },
+      "do": [
+        { "objective": "stay_hidden", "state": "failed" },
+        { "radio": "They've seen us. Finish it or break contact.", "from": "Commander" }
+      ]
+    },
+    {
+      "id": "gate_unseen",
+      "when": { "all": [{ "enter": "z_gate" }, { "not": { "alarm": true } }] },
+      "do": [
+        { "objective": "stay_hidden", "state": "complete" },
+        { "setFlag": "ghost" }
+      ]
+    },
+    {
+      "id": "cp_gate",
+      "when": { "enter": "z_gate" },
+      "do": [
+        { "setFlag": "at_gate" },
+        { "objective": "o_cross", "state": "complete" },
+        { "objective": "o_garrison", "state": "active" },
+        { "checkpoint": "cp_gate" },
+        { "repair": true },
+        { "radio": "The Lipovka gate. No lane round this one. We break the garrison, or it stays shut.", "from": "Commander" },
+        { "radio": "Heavy charges laid out, Vera. No jokes tonight.", "from": "Loader", "delay": 5.5 },
+        { "radio": "Vera. Your shot, when you're ready.", "from": "Commander", "delay": 9.5 }
+      ]
+    },
+    {
+      "id": "gate_first_blood",
+      "when": { "any": [{ "destroyed": "g_walk" }, { "destroyed": "g_post_n" }, { "destroyed": "g_post_s" }] },
+      "do": [{ "radio": "That woke the barracks. I hear engines starting.", "from": "Loader", "delay": 1.5 }]
+    },
+    {
+      "id": "gate_reserve",
+      "when": { "any": [{ "destroyed": ["g_walk", "g_post_n"] }, { "destroyed": ["g_walk", "g_post_s"] }, { "destroyed": ["g_post_n", "g_post_s"] }] },
+      "do": [
+        { "checkpoint": "cp_gate" },
+        { "spawn": [
+          { "id": "res_n", "name": "Reserve N", "marker": "res_n", "ai": "simple", "skill": 0.6, "posture": { "guard": "yard_n" } },
+          { "id": "res_s", "name": "Reserve S", "marker": "res_s", "ai": "simple", "skill": 0.6, "posture": { "guard": "yard_s" } }
+        ] },
+        { "alarm": true, "at": "yard_n", "radius": 800 },
+        { "radio": "Two more out of the barracks, north and south!", "from": "Gunner" }
+      ]
+    },
+    {
+      "id": "gate_hauptmann",
+      "when": { "destroyed": ["res_n", "res_s"] },
+      "do": [
+        { "checkpoint": "cp_gate" },
+        { "spawn": { "id": "hauptmann", "name": "Hauptmann Reuter", "marker": "hpt_spawn", "ai": "simple", "skill": 0.75, "hp": 120, "posture": { "guard": "gate_mouth" } } },
+        { "alarm": true, "at": "gate_mouth", "radius": 800 },
+        { "radio": "Their Hauptmann, coming through the gate itself. Heavy armour. Don't trade shots in the open.", "from": "Commander" },
+        { "radio": "He's sitting in my road.", "from": "Driver", "delay": 5 }
+      ]
+    },
+    {
+      "id": "gate_broken",
+      "when": { "destroyed": ["g_walk", "g_post_n", "g_post_s", "res_n", "res_s", "hauptmann"] },
+      "do": [
+        { "objective": "o_garrison", "state": "complete" },
+        { "objective": "o_home", "state": "active" },
+        { "radio": "The gate is ours. Take us through, Pasha.", "from": "Commander", "delay": 1.5 },
+        { "radio": "Going home.", "from": "Driver", "delay": 5 }
+      ]
+    },
+    {
+      "id": "gate_early",
+      "when": { "all": [{ "enter": "extraction" }, { "not": { "objective": "o_garrison", "is": "complete" } }] },
+      "do": [{ "radio": "Not with their guns at our back. Finish it.", "from": "Commander" }]
+    },
+    {
+      "id": "home_unseen",
+      "when": { "all": [{ "enter": "extraction" }, { "objective": "o_garrison", "is": "complete" }, { "flag": "ghost" }] },
+      "do": [
+        { "objective": "o_home", "state": "complete" },
+        { "end": "success", "text": "The Lipovka gate stands open, and nobody in the village heard us pass until it fell. On the far side the bell was still ringing. Pasha says he'll plant a new row in the spring." }
+      ]
+    },
+    {
+      "id": "home_loud",
+      "when": { "all": [{ "enter": "extraction" }, { "objective": "o_garrison", "is": "complete" }, { "not": { "flag": "ghost" } }] },
+      "do": [
+        { "objective": "o_home", "state": "complete" },
+        { "end": "success", "text": "The Lipovka gate stands open. On the far side the bell was still ringing. Pasha didn't look back. He says he'll see it in daylight." }
+      ]
+    }
+  ]
+}

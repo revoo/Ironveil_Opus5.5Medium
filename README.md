@@ -7,7 +7,8 @@ checkpoint districts while your crew talks you through it, and make real-time de
 remember. The original **team deathmatch** against a tactical AI squad remains as a 2D
 **Skirmish** mode.
 
-> **Status:** campaign foundation. Three missions: *The Long Night*, the 5-10 minute playtest level
+> **Status:** campaign foundation. Four missions: *The Road Home*, a demo that starts quiet in an occupied
+> village and builds stretch by stretch to a fight at the border gate, *The Long Night*, the 5-10 minute playtest level
 > (eleven stretches across a whole city), *Night Run*, a shorter demo with the same pacing (a few
 > guards per stretch, checkpoints with field repairs between them), and the grey box *The Crossing*, which exercises every system once: levels, missions, garrison AI,
 > checkpoints, real-time choices, the 3D renderer and the adaptive audio. Story, crew system and real levels are next. Multiplayer is deferred

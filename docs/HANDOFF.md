@@ -124,6 +124,8 @@ Keep the artifact's capabilities when republishing. Omitting `capabilities` carr
 - The enemy must never carry Nazi or WWII symbolism (see `docs/SETTING.md`).
 - Commit attribution lines come from the harness. Never put model names in code or commits.
 - The owner tests through the preview artifact. After a change they'd want to try, rebuild and republish it.
+- **Design work follows [WORKFLOW.md](WORKFLOW.md):** the owner directs and critiques, the agent generates the
+  arrangement and content with its own creative liberty. A short brief is the whole brief.
 
 ## Open owner decisions
 
