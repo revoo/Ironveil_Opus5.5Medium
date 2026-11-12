@@ -142,4 +142,16 @@ describe('responsive slippery movement', () => {
     for (let i = 0; i < 9; i++) drive(b, { moveX: 1, moveY: -0.3 }, 5);
     expect(b.pos).toEqual(a.pos);
   });
+
+  it('silent running stays quiet through turns, diagonals included', () => {
+    for (const [ax, ay, bx, by] of [[1, 0, 1, 1], [1, 0, 0, 1], [1, 1, -1, 1], [0, -1, 1, 0]]) {
+      const t = fresh();
+      drive(t, { moveX: ax, moveY: ay, silent: true }, 60);
+      expect(t.quiet).toBe(true);
+      for (let i = 0; i < 60; i++) {
+        stepMovement(t, { ...neutralInput(), moveX: bx, moveY: by, silent: true }, map, DT, 1);
+        expect(t.quiet, `turn ${ax},${ay} -> ${bx},${by}, tick ${i}`).toBe(true);
+      }
+    }
+  });
 });

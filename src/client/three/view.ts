@@ -127,6 +127,9 @@ export class MissionView3D {
   private heardRadio = new Set<string>();
   private heardBarks = new Set<string>();
   private heardCrew = new Set<string>();
+  /** Where each tank was drawn this frame (interpolated). HUD marks follow these, not the 30 Hz
+   *  simulation positions, or they shake against the tank they belong to. */
+  private drawn = new Map<number, Vec>();
   private noticeCount = 0;
   private hadChoice = false;
   private lastDet = 0;
@@ -567,7 +570,7 @@ export class MissionView3D {
     const full = !!me && me.phase === 'charging' && me.hold !== null;
     if (full && !this.wasFull) this.d.audio.chargeFull();
     this.wasFull = full;
-    this.hud.update(cur, me, this.mousePx, this.aim, (x, y, h) => this.project(x, y, h), dt);
+    this.hud.update(cur, me, this.mousePx, this.aim, (x, y, h) => this.project(x, y, h), dt, this.drawn);
     this.comms.update(dt, s.paused);
     this.directAudio(now);
     const tEnd = performance.now();
@@ -694,6 +697,7 @@ export class MissionView3D {
     const prevMap = new Map(prev.tanks.map((t) => [t.id, t]));
     const seen = new Set<number>();
     let self: Vec | null = null;
+    this.drawn.clear();
     for (const t of cur.tanks) {
       if (!t.alive) continue;
       const v = this.tankVis(t);
@@ -727,6 +731,7 @@ export class MissionView3D {
       if (health < 0.7) this.blasts.smolder(x, y, hull, Math.min(1, (0.7 - health) / 0.55), dt);
       this.renderCharge(t, v, x, y, tur, dt);
       m.beam.visible = v.silent < 0.5;
+      this.drawn.set(t.id, { x, y });
       if (t.id === this.session.playerId) self = { x, y };
     }
     for (const [id, v] of this.tanks)
