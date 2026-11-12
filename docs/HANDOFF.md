@@ -5,6 +5,12 @@ invariants, gotchas), then this page. Last updated: 2026-11-10.
 
 ## Where things stand
 
+**2026-11-12, after two playtests on the new preview:** the 3D minimap is gone, a stuck Spotted meter
+is fixed, *The Long Night* opens with a quiet road along the Wall that lasts as long as its intro
+dialogue, mid-mission crew lines are short barks over the tank, and silent running swaps the
+headlight for a faint red lamp. The perf harness positions were shifted for the new map rows but
+**the harness has not been re-run since**. Not done: *Night Run*'s opening stretch.
+
 `main` holds everything, including the performance audit and second optimisation pass (D34–D37,
 [PERF-AUDIT.md](PERF-AUDIT.md)), merged by fast-forward after the owner's playtest (120 fps locked on
 the M1 Pro, see below). Branch `perf/audit-pass` is kept as a souvenir. The preview artifact runs it.
@@ -79,7 +85,7 @@ How the pieces fit now (details in CLAUDE.md gotchas):
 
 ## The playtest perf log (reading it)
 
-When the game runs as the owner's preview artifact, it writes to the artifact's private database. Use the `ArtifactData` tool with url `https://claude.ai/artifact/UveMJUFVhBM6xfCTivZXxg`:
+When the game runs as the owner's preview artifact, it writes to the artifact's private database. Use the `ArtifactData` tool with url `https://claude.ai/artifact/5XRAYJFDgPBmwN3iNetP8f` (published 2026-11-12 from a new account; the earlier preview `UveMJUFVhBM6xfCTivZXxg` and its two logged sessions can't be opened from it):
 
 1. `list` collection `perf`. You get one document per session: machine, settings, build and a summary.
 2. `list` collection `perf/<session id>/chunks`, with `out_dir` set to save the files.

@@ -54,6 +54,16 @@ describe('simple mission AI', () => {
     expect(ai.state(1)).toBe('combat');
   });
 
+  it('a unit killed in combat no longer holds the detection meter at spotted', () => {
+    const { world, ai, run } = setup(openMap(40, 20), { x: 500, y: 300 }, { x: 600, y: 300 });
+    run(0.1);
+    expect(ai.maxSuspicion()).toBe(1);
+    world.tank(1).alive = false;
+    run(0.1);
+    expect(ai.maxSuspicion()).toBe(0);
+    expect(ai.state(1)).toBe('calm');
+  });
+
   it('walls block detection', () => {
     const lines: string[] = [];
     for (let r = 0; r < 20; r++) {

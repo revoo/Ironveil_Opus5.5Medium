@@ -14,7 +14,7 @@ const report = (ok, what, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}
 // ---- 1. presets, resize, restart, fight (small window: speed)
 {
   const { browser, page, errors } = await open({ w: 657, h: 352, low: true });
-  const settle = () => page.evaluate(() => window.__settle(2544, 500, 6));
+  const settle = () => page.evaluate(() => window.__settle(2544, 916, 6));
   await settle();
   await page.evaluate(() => { const iv = window.__ironveil; iv.settings.lowEffects = false; iv.view().applySettings(); });
   await settle();
@@ -35,7 +35,7 @@ const report = (ok, what, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}
   const lost = await page.evaluate(() => window.__ironveil.view().renderer.getContext().isContextLost());
   report(errors.length === 0 && !lost, 'two mission restarts', errors.join(' | '));
   errors.length = 0;
-  await page.evaluate(() => { const v = window.__ironveil.view(); window.__kill(); v.smoke.wreck(2600, 470); v.sparks.burst(2560, 10, 500, 1, 0, 60, 260); for (let k = 0; k < 40; k++) { v.camTarget.set(2544, 0, 500); window.__step(1); } });
+  await page.evaluate(() => { const v = window.__ironveil.view(); window.__kill(); v.smoke.wreck(2600, 886); v.sparks.burst(2560, 10, 916, 1, 0, 60, 260); for (let k = 0; k < 40; k++) { v.camTarget.set(2544, 0, 916); window.__step(1); } });
   await page.screenshot({ path: `${dir}fight.png`, timeout: 600000 });
   report(errors.length === 0, 'a kill with explosion, fire and smoke', errors.join(' | ') || `(look at ${dir}fight.png)`);
   await browser.close();
@@ -60,12 +60,12 @@ const report = (ok, what, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}
     report(r.offPct < 0.005 && r.max < 40, `shadows after ${name} equal a full redraw`, `mean ${r.mean} off>8 ${r.offPct}% max ${r.max}`);
   };
   // the aim marker follows the turret between frames: keep it out of the comparison
-  await page.evaluate(() => { const v = window.__ironveil.view(); window.__settle(2500, 520, 6);
-    for (let i = 0; i < 25; i++) { const s = v.session, t = s.world.tank(s.playerId); t.pos.x = 2500 + i * 5; t.pos.y = 520 - i * 2; v.camTarget.set(2544, 0, 500); window.__step(1); } });
+  await page.evaluate(() => { const v = window.__ironveil.view(); window.__settle(2500, 936, 6);
+    for (let i = 0; i < 25; i++) { const s = v.session, t = s.world.tank(s.playerId); t.pos.x = 2500 + i * 5; t.pos.y = 936 - i * 2; v.camTarget.set(2544, 0, 916); window.__step(1); } });
   await pair('driving');
-  await page.evaluate(() => { const v = window.__ironveil.view(); window.__kill(); for (let i = 0; i < 12; i++) { v.camTarget.set(2544, 0, 500); window.__step(1); } });
+  await page.evaluate(() => { const v = window.__ironveil.view(); window.__kill(); for (let i = 0; i < 12; i++) { v.camTarget.set(2544, 0, 916); window.__step(1); } });
   await pair('a kill');
-  await page.evaluate(() => { const v = window.__ironveil.view(); let n = 0; while (v.blasts.debrisInFlight && n < 200) { v.camTarget.set(2544, 0, 500); window.__step(1, 100); n++; } for (let i = 0; i < 3; i++) { v.camTarget.set(2544, 0, 500); window.__step(1, 100); } });
+  await page.evaluate(() => { const v = window.__ironveil.view(); let n = 0; while (v.blasts.debrisInFlight && n < 200) { v.camTarget.set(2544, 0, 916); window.__step(1, 100); n++; } for (let i = 0; i < 3; i++) { v.camTarget.set(2544, 0, 916); window.__step(1, 100); } });
   await pair('the debris fading');
   report(errors.length === 0, 'no page errors in the shadow run', errors.join(' | '));
   await browser.close();

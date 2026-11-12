@@ -4,7 +4,6 @@
 //
 //   top-left      operation title + objectives (completed ones fold away)
 //   top-centre    detection: a slim meter that is nearly invisible while you are hidden
-//   top-right     minimap (owned by the view)
 //   bottom-centre the comms panel (`comms.ts`, owned by the view): crew radio with portraits
 //   bottom-left   a slim hull gauge with smoke / silent / brush chips
 //   bottom-right  real-time decisions
@@ -13,12 +12,13 @@
 //   bottom-left   (beside the hull) the cannon gauge: charge, burst threshold, damage, state
 //   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss; barks as callouts above them;
 //                 a health bar once damaged (bright after a hit, with the lost chunk draining away)
+//   over our tank the crew's barks, one at a time (after the intro, the crew only talks this way)
 //   cursor hits   a hit marker on every hit of ours, red and larger on a kill
 import type { MissionSession } from '../../game/mission/session';
 import type { Observation, TankView } from '../../sim/observation';
 import { WEAPON_TICKS, shotStats } from '../../sim/weapon';
 import { TUNING } from '../../sim/tuning';
-import { displayName } from '../../content/lore';
+import { CREW, displayName } from '../../content/lore';
 
 const ICON = {
   smoke: '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.2 9.2 4.4 4.4 0 0 0 7 18z"/></svg>',
@@ -49,6 +49,13 @@ export class Hud3D {
   private hint = 0;
   private hullSegs: HTMLElement[] = [];
   private bubbles = new Map<number, HTMLElement>();
+  /** Crew barks waiting their turn, and the one on screen (seconds left). */
+  private crewQueue: { from: string; text: string }[] = [];
+  private crewEl: HTMLElement | null = null;
+  private crewLeft = 0;
+  private crewGap = 0;
+  /** Called when a crew bark goes on screen, so its voice starts with it. */
+  onCrewBark: ((from: string, text: string) => void) | null = null;
   /** Enemy markers, one element per enemy, rebuilt only when its kind changes (?, !, health bar). */
   private marks = new Map<number, { el: HTMLDivElement; shape: string; arc: SVGCircleElement | null; hp: HTMLElement | null; trail: HTMLElement | null; fill: HTMLElement | null }>();
   /** Per enemy: when we last saw it hit (performance.now ms) and the trailing "lost health" value. */
@@ -112,14 +119,55 @@ export class Hud3D {
     c.classList.add(kill ? 'kill' : 'hit');
   }
 
+  /** Queue a short callout from our own crew; it is drawn over our tank when its turn comes. */
+  crewSay(from: string, text: string): void {
+    // an urgent line ("Seen!") is not kept waiting behind route chatter
+    if (/!/.test(text)) this.crewQueue.length = 0;
+    this.crewQueue.push({ from, text });
+    if (this.crewQueue.length > 4) this.crewQueue.shift();
+  }
+
+  private updateCrew(me: TankView | undefined, at: (t: TankView, h: number) => { x: number; y: number; on: boolean }, dt: number): void {
+    dt = Math.min(dt, 0.1);
+    if (this.crewEl) {
+      this.crewLeft -= dt;
+      const urgentNext = this.crewQueue.length > 0 && /!/.test(this.crewQueue[0]!.text);
+      if (this.crewLeft <= 0 || !me || urgentNext) {
+        this.crewEl.remove();
+        this.crewEl = null;
+        this.crewGap = urgentNext ? 0 : 0.35;
+      }
+    } else if (this.crewGap > 0) this.crewGap -= dt;
+    else if (me && this.crewQueue.length) {
+      const b = this.crewQueue.shift()!;
+      const el = document.createElement('div');
+      el.className = `bark crew${/!/.test(b.text) ? ' urgent' : ''}`;
+      el.innerHTML = `<div class="box"><span class="who">${esc(CREW[b.from]?.nick ?? b.from)}</span><span class="say">${esc(b.text)}</span></div>`;
+      this.el.barks.appendChild(el);
+      this.crewEl = el;
+      this.crewLeft = 1.7 + b.text.length * 0.05;
+      this.onCrewBark?.(b.from, b.text);
+    }
+    if (this.crewEl && me) {
+      const p = at(me, 64);
+      this.crewEl.style.opacity = String(Math.min(1, this.crewLeft / 0.4));
+      this.crewEl.style.transform = `translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)`;
+    }
+  }
+
   /** An enemy took damage: its health bar lights up. */
   noteHit(id: number): void {
     const h = this.hits.get(id);
     this.hits.set(id, { at: performance.now(), trail: h?.trail ?? 1 });
   }
 
-  update(cur: Observation, me: TankView | undefined, mouse: { x: number; y: number }, aim: { x: number; y: number }, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }, dt: number): void {
+  update(cur: Observation, me: TankView | undefined, mouse: { x: number; y: number }, aim: { x: number; y: number }, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }, dt: number, drawn: ReadonlyMap<number, { x: number; y: number }>): void {
     const s = this.session;
+    // Marks go where the tank is drawn (interpolated between ticks), not where the last tick left it.
+    const at = (t: TankView, h: number) => {
+      const d = drawn.get(t.id) ?? t;
+      return project(d.x, d.y, h);
+    };
     const tick = cur.tick;
     this.root.classList.toggle('ended', !!s.outcome);
 
@@ -242,7 +290,7 @@ export class Hud3D {
     const shown = new Set<number>();
     for (const t of cur.tanks) {
       if (t.team === cur.team || !t.alive) continue;
-      const p = project(t.x, t.y, 64);
+      const p = at(t, 64);
       if (!p.on) continue;
       const boss = !s.simple.has(t.id);
       const st = s.simple.state(t.id);
@@ -293,14 +341,15 @@ export class Hud3D {
       }
 
     // ---- barks: callouts over the enemy that spoke, only while that enemy is visible
-    this.updateBarks(cur, project);
+    this.updateBarks(cur, at);
+    this.updateCrew(me, at, dt);
 
     // ---- first-seconds hint
     this.hint += dt;
     if (this.hint < 14) E.hint.style.opacity = String(this.hint < 12 ? 1 : Math.max(0, 1 - (this.hint - 12) / 1.5));
   }
 
-  private updateBarks(cur: Observation, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }): void {
+  private updateBarks(cur: Observation, at: (t: TankView, h: number) => { x: number; y: number; on: boolean }): void {
     const tick = cur.tick;
     const latest = new Map<number, (typeof this.session.barks)[number]>();
     for (const b of this.session.barks) if (b.tick <= tick && tick - b.tick < BARK_TICKS) latest.set(b.unit, b);
@@ -309,7 +358,7 @@ export class Hud3D {
     for (const [unit, b] of latest) {
       // Observation only: a hidden or dead speaker shows nothing.
       const t = cur.tanks.find((v) => v.id === unit && v.alive && v.team !== cur.team);
-      const p = t && project(t.x, t.y, 64);
+      const p = t && at(t, 64);
       if (!t || !p || !p.on) continue;
       seen.add(unit);
       const key = `${b.tick}|${b.text}`;

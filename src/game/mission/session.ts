@@ -84,7 +84,9 @@ export class MissionSession {
   private unitDefs = new Map<string, UnitDef>();
   private spawned: UnitDef[] = [];
   private missionRadio: RadioLine[] = [];
-  private pendingRadio: { tick: number; line: RadioLine }[] = [];
+  private pendingRadio: { tick: number; line: RadioLine; bark?: boolean }[] = [];
+  /** Crew barks: short callouts the 3D view draws over our own tank (not the comms panel). */
+  crewBarks: RadioLine[] = [];
   private choiceActions: Action[][] = [];
   private choiceDef: ChoiceDef | null = null;
   private pendingCheckpoint: string | null = null;
@@ -154,6 +156,7 @@ export class MissionSession {
     this.cues = [];
     this.missionRadio = [];
     this.pendingRadio = [];
+    this.crewBarks = [];
     this.choice = null;
     this.choiceActions = [];
     this.choiceDef = null;
@@ -270,6 +273,10 @@ export class MissionSession {
         const line = { from: a.from, text: a.radio, tick };
         if (a.delay) this.pendingRadio.push({ tick: tick + Math.round(a.delay * HZ), line });
         else this.pushRadio(line);
+      } else if ('bark' in a) {
+        const line = { from: a.from, text: a.bark, tick };
+        if (a.delay) this.pendingRadio.push({ tick: tick + Math.round(a.delay * HZ), line, bark: true });
+        else this.pushBark(line);
       } else if ('objective' in a) this.notice(objectiveNotice(a.state, this.def.objectives.find((o) => o.id === a.objective)?.text ?? a.objective));
       else if ('spawn' in a) {
         for (const u of Array.isArray(a.spawn) ? a.spawn : [a.spawn]) {
@@ -316,6 +323,11 @@ export class MissionSession {
     this.choiceActions = [];
     this.choiceDef = null;
     this.runner.runActions(actions, this.effects);
+  }
+
+  private pushBark(line: RadioLine): void {
+    this.crewBarks.push(line);
+    if (this.crewBarks.length > 40) this.crewBarks.shift();
   }
 
   private pushRadio(line: RadioLine): void {
@@ -402,8 +414,12 @@ export class MissionSession {
 
     if (this.outcome) return;
     const tick = this.world.tick;
-    while (this.pendingRadio.length && this.pendingRadio[0]!.tick <= tick) this.pushRadio({ ...this.pendingRadio.shift()!.line, tick });
     this.pendingRadio.sort((a, b) => a.tick - b.tick);
+    while (this.pendingRadio.length && this.pendingRadio[0]!.tick <= tick) {
+      const due = this.pendingRadio.shift()!;
+      if (due.bark) this.pushBark({ ...due.line, tick });
+      else this.pushRadio({ ...due.line, tick });
+    }
     if (this.choice && tick >= this.choice.expiresTick) this.choose(this.choice.defaultIndex);
     this.runner.update(this.query(), this.effects);
     if (this.pendingCheckpoint) {

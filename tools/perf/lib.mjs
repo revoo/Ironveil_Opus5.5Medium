@@ -11,7 +11,7 @@ export const PORT = Number(process.env.PORT || 5199);
 export const OUT = new URL('./out/', import.meta.url).pathname;
 
 /** Places along The Long Night (world x, y): open start, old town, a lit plaza with guards, and so on. */
-export const SPOTS = { start: [144, 432], oldtown: [1520, 432], plaza: [2544, 500], boulevard: [3280, 432], factory: [4016, 1380], river: [1840, 1232], railyard: [1808, 2300], border: [3632, 2320], approach: [4848, 3056] };
+export const SPOTS = { start: [144, 848], oldtown: [1520, 848], plaza: [2544, 916], boulevard: [3280, 848], factory: [4016, 1796], river: [1840, 1648], railyard: [1808, 2716], border: [3632, 2736], approach: [4848, 3472] };
 
 /**
  * Open the game and start a mission with the page's own frame loop switched off.
@@ -46,7 +46,7 @@ export async function open({ port = PORT, w = 1314, h = 704, mission = 'long-nig
   await page.evaluate(() => { window.__reseed(); document.querySelector('#go').click(); });
   await page.waitForFunction(() => !!window.__ironveil.view(), null, { timeout: 600000 });
   await takeOver(page);
-  if (hideHud) await page.addStyleTag({ content: '.h3, .minimap3d { visibility: hidden !important; }' });
+  if (hideHud) await page.addStyleTag({ content: '.h3 { visibility: hidden !important; }' });
   return { browser, page, errors };
 }
 

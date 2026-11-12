@@ -25,7 +25,7 @@ export interface FrameCost {
   simMs: number;
   /** CPU time spent issuing the render passes (not GPU execution time). */
   renderMs: number;
-  /** HUD, minimap and audio direction. */
+  /** HUD and audio direction. */
   hudMs: number;
   /** Whole frame callback. */
   cpuMs: number;

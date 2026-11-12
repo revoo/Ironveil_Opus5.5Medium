@@ -45,6 +45,8 @@ export function stepMovement(tank: Tank, input: TankInput, map: GameMap, dt: num
   let my = Number.isFinite(input.moveY) ? input.moveY : 0;
   const ml = Math.hypot(mx, my);
   const v = tank.vel;
+  /** Speed the engine is driving: along the input when there is input, else the whole speed. */
+  let driven = -1;
 
   if (ml > 1e-3) {
     mx /= ml;
@@ -68,6 +70,7 @@ export function stepMovement(tank: Tank, input: TankInput, map: GameMap, dt: num
     }
     v.x = mx * vpar + px;
     v.y = my * vpar + py;
+    driven = vpar;
     tank.hull = rotateToward(tank.hull, Math.atan2(my, mx), M.hullTurnRate * dt);
   } else {
     const s = Math.hypot(v.x, v.y);
@@ -111,7 +114,10 @@ export function stepMovement(tank: Tank, input: TankInput, map: GameMap, dt: num
   if (Number.isFinite(desired)) tank.turret = rotateToward(tank.turret, desired, M.turretTurnRate * dt);
   tank.turret = wrapAngle(tank.turret);
 
-  const speed = Math.hypot(v.x, v.y);
+  // Quiet is judged on the driven speed. In a turn the old heading's momentum slides sideways for a
+  // moment and the total speed rises above the silent cap, but that slide is not engine noise: judged
+  // on the total, a diagonal turn while silent counted as loud (engine heard, headlights back on).
+  const speed = driven >= 0 ? driven : Math.hypot(v.x, v.y);
   tank.quiet = input.silent && speed <= terrainTop * M.silentFactor + 1e-6;
 }
 

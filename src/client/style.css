@@ -326,6 +326,9 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-barks .bark { position: absolute; left: 0; top: 0; width: 0; height: 0; --tone: var(--dim); transition: opacity .2s linear; }
 .h3-barks .bark.sus { --tone: var(--amber); }
 .h3-barks .bark.combat { --tone: var(--rust); }
+/* our own crew, over our tank: steel blue like the rest of our side's HUD marks */
+.h3-barks .bark.crew { --tone: var(--steel); z-index: 1; }
+.h3-barks .bark.crew.urgent { --tone: var(--red); }
 .h3-barks .bark::before { content: ''; position: absolute; left: -.5px; bottom: 18px; width: 1px; height: 16px;
   background: linear-gradient(to top, transparent, var(--tone)); opacity: .75; }
 .h3-barks .box { position: absolute; bottom: 34px; left: 0; transform: translateX(-50%); transform-origin: 50% 100%; white-space: nowrap;
@@ -344,6 +347,5 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-hint { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); display: flex; gap: 18px; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--dim); transition: opacity .4s; }
 .h3-hint span { display: inline-flex; align-items: center; gap: 5px; }
 .h3-hint kbd { min-width: 18px; height: 18px; font-size: 11px; }
-.minimap3d { position: absolute; top: 22px; right: 22px; pointer-events: none; border: 1px solid rgba(237,244,223,.16); border-radius: 3px; opacity: .9; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
 @media (max-width: 1100px) { .h3-hint { display: none; } .h3-status .gun .st { display: none; } }
 @media (prefers-reduced-motion: reduce) { .h3 * { animation: none !important; transition: none !important; } }

@@ -153,6 +153,12 @@ export class AudioEngine {
     return this.radio.netChatter();
   }
 
+  /** One of our own crew calling out on the intercom: the bark voice, centred and close. */
+  crewBark(from: string, text: string): void {
+    if (!this.radio || this.ctx?.state !== 'running') return;
+    this.radio.bark({ from, text, flavour: /!/.test(text) ? 'alert' : 'calm', pan: 0, vol: 0.85 });
+  }
+
   /** A garrison bark from a visible enemy: radio burst at its position, plus any world foley. */
   bark(from: string, text: string, kind: BarkKind, pan: number, vol: number): void {
     if (!this.radio) return;

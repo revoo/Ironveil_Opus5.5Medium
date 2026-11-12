@@ -73,6 +73,10 @@ npm run dev         # http://localhost:5173
   caches its size in `resize()`. HUD elements are looked up once (`Hud3D.el`); enemy markers are kept per enemy.
 - Garrison barks (`BARK_LINES` in `ai/simple.ts`) are not radio: the 3D HUD draws them as callouts
   over visible speakers and `Radio.bark` plays them panned. Line choice must not draw from the AI RNG.
+- Crew barks (mission `bark` actions, `session.crewBarks`) are not radio either: `Hud3D` queues them and
+  calls `onCrewBark` when one goes on screen, which is when `audio.crewBark` voices it.
+- *The Long Night*'s map has an opening strip of 13 rows on top (`OY` in `tools/long-night-level.mjs`); the
+  rest of the generator is written in the old row numbers and shifted. `tools/perf/` positions are world px.
 - Crew radio goes through `Comms` (three/comms.ts), which owns the queue and timing and calls
   `audio.transmit` when a line goes on air. Don't play radio lines from anywhere else, or text and voice
   drift apart. Portrait SVG parts (`.head .eyes .brows .m0/.m1/.m2`) are animated by CSS classes.
@@ -100,7 +104,7 @@ npm run dev         # http://localhost:5173
 ## Preview builds (claude.ai artifacts)
 
 The owner tests through private claude.ai artifacts. Republish to the same URL after changes:
-- Game: https://claude.ai/artifact/UveMJUFVhBM6xfCTivZXxg — `npm run build`, then a page file with the
+- Game: https://claude.ai/artifact/5XRAYJFDgPBmwN3iNetP8f — `npm run build`, then a page file with the
   `<title>`, the Google Fonts link from `index.html`, the built CSS **inlined** in `<style>` (artifacts only
   allow external stylesheets from Google Fonts), `<div id="game"></div><div id="ui"></div>`, and
   `<script type="module" src="./assets/index-*.js">`; publish with the JS in `files` and `null` the old JS name.
@@ -131,6 +135,14 @@ measured results, how to read the playtest perf log, and practical notes for clo
   the owner's playtest ran **120 fps locked at 100% render scale** (1314×704 window), no stutters. At the
   display's cap the perf log can no longer show headroom: docs/PERF-PLAN.md starts with a benchmark mode
   for that. Not yet verified by a human: the audio mix, combat numbers.
+- **Owner's rules from the 2026-11-12 playtests** (docs/MISSIONS.md, "Dialogue pacing"): dialogue boxes cover
+  too much of the screen, so they are for the intro only; the opening stretch of a level must outlast the intro
+  (`dialogueSeconds()` in `three/comms.ts`), the first enemy arrives when it ends, and after that the crew talks
+  in **crew barks** (`{ "bark": … }` mission action, max 64 characters, drawn over our tank by `Hud3D.crewSay`).
+  *The Long Night* does all of it (opening road along the Wall, tested); *Night Run* has the barks but its
+  opening stretch is still short. The 3D view has no minimap (removed on the owner's word; don't add one back).
+- Silent running switches the headlight for a faint red lamp (`Headlights` in fx.ts takes `red`; the light
+  count does not change).
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Candidates for next features: crew system phase 1, Ink dialogue, first real LDtk mission, recorded
   CC0 weapon/engine samples, a crew line when the player takes a heavy hit, steam on a vented cannon.

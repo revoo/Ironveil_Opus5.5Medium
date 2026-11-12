@@ -58,8 +58,14 @@ export interface ChoiceDef {
   default?: number;
 }
 
+/** The longest crew bark the validator accepts (characters): a callout, not a speech. */
+export const CREW_BARK_MAX = 64;
+
 export type Action =
+  /** A line in the comms panel's dialogue box. It covers much of the screen: for the intro only. */
   | { radio: string; from: string; delay?: number }
+  /** A short crew callout drawn over the player's tank (at most `CREW_BARK_MAX` characters). */
+  | { bark: string; from: string; delay?: number }
   | { setFlag: string; value?: FlagValue }
   | { addFlag: string; by?: number }
   | { objective: string; state: ObjectiveState }

@@ -26,6 +26,27 @@ interface Live {
 }
 
 const LOG_LINES = 2;
+/** Pause between two queued lines (seconds). */
+const NEXT_GAP = 0.45;
+
+/** A busy channel talks faster: the pace of a line with `waiting` lines queued behind it. */
+function pace(waiting: number): number {
+  return waiting >= 3 ? 1.45 : waiting >= 1 ? 1.2 : 1;
+}
+
+/**
+ * How long the panel takes to say `lines` when they are queued together (seconds, to the end of the
+ * last word). Levels are checked against this: the dialogue box covers much of the screen, so the
+ * stretch it plays over has to last at least this long (see docs/MISSIONS.md, "Dialogue pacing").
+ */
+export function dialogueSeconds(lines: readonly { from: string; text: string }[]): number {
+  let t = 0;
+  lines.forEach((l, i) => {
+    const waiting = lines.length - 1 - i;
+    t += planUtterance(l.text, voiceFor(l.from, 'slavic'), pace(waiting)).dur + (waiting ? NEXT_GAP : 0);
+  });
+  return t;
+}
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -151,8 +172,7 @@ export class Comms {
   }
 
   private start(line: CommsLine): void {
-    // a busy channel talks faster
-    const speed = this.queue.length >= 3 ? 1.45 : this.queue.length >= 1 ? 1.2 : 1;
+    const speed = pace(this.queue.length);
     const voice = voiceFor(line.from, line.enemy ? 'germanic' : 'slavic');
     const u = planUtterance(line.text, voice, speed);
     this.live = { line, u, t: 0 };
@@ -225,7 +245,7 @@ export class Comms {
     this.q<HTMLElement>('.cm-vu i').style.clipPath = 'inset(0 100% 0 0)';
     this.el.dataset.state = 'hold';
     // time to finish reading; short when the next line is waiting
-    this.hold = this.queue.length ? 0.45 : Math.min(3.2, 1.3 + L.line.text.length * 0.012);
+    this.hold = this.queue.length ? NEXT_GAP : Math.min(3.2, 1.3 + L.line.text.length * 0.012);
     this.renderNext();
     const who = speaker(L.line.from, L.line.enemy);
     this.log.push({ tag: who.tag, text: L.line.text, enemy: L.line.enemy });
