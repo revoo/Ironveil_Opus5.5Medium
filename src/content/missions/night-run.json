@@ -32,13 +32,15 @@
       "when": { "after": 1 },
       "do": [
         { "radio": "Long way round tonight, comrades. Yard, market, canal, then their depot.", "from": "Commander" },
-        { "radio": "One patrol on the road ahead. Hedges both sides if we'd rather not meet it.", "from": "Driver", "delay": 4 }
+        { "radio": "One patrol on the road ahead. Hedges both sides if we'd rather not meet it.", "from": "Driver" }
       ]
     },
     {
       "id": "outskirts",
       "when": { "enter": "outskirts" },
-      "do": [{ "radio": "Hold for it to turn away, then go. Silent running keeps the engine down.", "from": "Gunner" }]
+      "do": [
+        { "bark": "Wait for it to turn, then go. Shift for silent.", "from": "Gunner" }
+      ]
     },
     {
       "id": "cp_yard",
@@ -46,14 +48,16 @@
       "do": [
         { "checkpoint": "cp_yard" },
         { "repair": true },
-        { "radio": "Rail yard. Border troops on the road gate, another walking the sidings.", "from": "Gunner" },
-        { "radio": "Fence is down along the south side. All overgrown.", "from": "Driver", "delay": 3.5 }
+        { "bark": "Rail yard. One on the gate, one in the sidings.", "from": "Gunner" },
+        { "bark": "Fence is down on the south side. Overgrown.", "from": "Driver", "delay": 4 }
       ]
     },
     {
       "id": "in_yard",
       "when": { "enter": "yard_inside" },
-      "do": [{ "radio": "Through the fence. The road bends south past the shed.", "from": "Driver" }]
+      "do": [
+        { "bark": "Through. Road bends south past the shed.", "from": "Driver" }
+      ]
     },
     {
       "id": "cp_turn",
@@ -63,14 +67,16 @@
         { "objective": "o_market", "state": "active" },
         { "checkpoint": "cp_turn" },
         { "repair": true },
-        { "radio": "Clear of the yard. Bogdan, patch what you can.", "from": "Commander" },
-        { "radio": "Market's west of here. There's a back alley behind the shops.", "from": "Driver", "delay": 3.5 }
+        { "bark": "Clear of the yard. Bogdan, patch what you can.", "from": "Commander" },
+        { "bark": "Market's west. Back alley behind the shops.", "from": "Driver", "delay": 4 }
       ]
     },
     {
       "id": "market",
       "when": { "enter": "market" },
-      "do": [{ "radio": "Two in the square. One parked, one doing laps.", "from": "Gunner" }]
+      "do": [
+        { "bark": "Two in the square. One parked, one doing laps.", "from": "Gunner" }
+      ]
     },
     {
       "id": "cp_market",
@@ -80,14 +86,16 @@
         { "objective": "o_canal", "state": "active" },
         { "checkpoint": "cp_market" },
         { "repair": true },
-        { "radio": "Canal ahead. The bridge is watched.", "from": "Gunner" },
-        { "radio": "There's a ford south, through the reeds. Mud'll slow us and leave tracks.", "from": "Driver", "delay": 3.5 }
+        { "bark": "Canal ahead. Bridge is watched.", "from": "Gunner" },
+        { "bark": "Ford to the south, in the reeds. Mud leaves tracks.", "from": "Driver", "delay": 4 }
       ]
     },
     {
       "id": "canal",
       "when": { "enter": "canal" },
-      "do": [{ "radio": "Keep it slow. Someone walks the far bank.", "from": "Commander" }]
+      "do": [
+        { "bark": "Slow. Someone walks the far bank.", "from": "Commander" }
+      ]
     },
     {
       "id": "cp_bend",
@@ -97,8 +105,8 @@
         { "objective": "o_depot", "state": "active" },
         { "checkpoint": "cp_bend" },
         { "repair": true },
-        { "radio": "Last stretch. Directorate road block at the Wall ahead.", "from": "Gunner" },
-        { "radio": "North end of that wall's collapsed. Overgrown, we'd fit.", "from": "Driver", "delay": 3.5 }
+        { "bark": "Last stretch. Road block at the Wall.", "from": "Gunner" },
+        { "bark": "North end's collapsed. Overgrown, we'd fit.", "from": "Driver", "delay": 4 }
       ]
     },
     {
@@ -107,16 +115,16 @@
       "do": [
         { "checkpoint": "cp_depot" },
         { "repair": true },
-        { "radio": "Depot fence. Two on the gate, one walking the yard inside.", "from": "Gunner" },
-        { "radio": "Drainage ditch runs under the fence on the south side.", "from": "Driver", "delay": 3.5 },
-        { "radio": "Extraction's at the far east end. Get us there.", "from": "Commander", "delay": 7 }
+        { "bark": "Depot fence. Two on the gate, one inside.", "from": "Gunner" },
+        { "bark": "Drainage ditch under the fence, south side.", "from": "Driver", "delay": 4 },
+        { "bark": "Extraction's the far east end.", "from": "Commander", "delay": 8 }
       ]
     },
     {
       "id": "depot_reaction",
       "when": { "any": [{ "destroyed": "f_gate_n" }, { "destroyed": "f_gate_s" }, { "destroyed": "f_patrol" }] },
       "do": [
-        { "radio": "They're calling it in. Something's coming from the rail sidings.", "from": "Loader" },
+        { "bark": "They're calling it in. Something's coming!", "from": "Loader" },
         { "spawn": { "id": "f_qrf", "name": "Depot Reaction", "marker": "f_qrf", "ai": "simple", "skill": 0.6 } },
         { "alarm": true, "at": "depot_inside" }
       ]
@@ -126,7 +134,7 @@
       "when": { "alarm": true },
       "do": [
         { "objective": "stay_hidden", "state": "failed" },
-        { "radio": "They've seen us! Finish it or break contact.", "from": "Commander" }
+        { "bark": "Seen! Finish it or break contact.", "from": "Commander" }
       ]
     },
     {

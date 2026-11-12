@@ -36,6 +36,9 @@ export interface MissionViewDeps {
   onEnd: (s: MissionSession) => void;
 }
 
+/** Intensity of the red lamp a silent tank runs on (the headlight is 220000). */
+const SILENT_LAMP = 26000;
+
 interface TankVis {
   model: TankModel;
   team: 0 | 1;
@@ -53,6 +56,8 @@ interface TankVis {
   /** Pose and visibility its shadow was last drawn with (see `trackCasters`). */
   shadowKey: number[];
   shadowSeen: boolean;
+  /** 0..1, eased: how far the lights have gone over to silent running (headlights out, red lamp). */
+  silent: number;
 }
 
 export class MissionView3D {
@@ -121,6 +126,7 @@ export class MissionView3D {
   // audio direction state
   private heardRadio = new Set<string>();
   private heardBarks = new Set<string>();
+  private heardCrew = new Set<string>();
   private noticeCount = 0;
   private hadChoice = false;
   private lastDet = 0;
@@ -253,6 +259,8 @@ export class MissionView3D {
     d.audio.setMood('calm');
     // lines already on the radio at construction (e.g. after a checkpoint) are not replayed
     for (const r of this.session.radio) this.heardRadio.add(`${r.tick}|${r.from}|${r.text}`);
+    for (const b of this.session.crewBarks) this.heardCrew.add(`${b.tick}|${b.from}|${b.text}`);
+    this.hud.onCrewBark = (from, text) => this.d.audio.crewBark(from, text);
     for (const b of this.session.barks) this.heardBarks.add(`${b.unit}|${b.tick}|${b.text}`);
     this.noticeCount = this.session.notices.length;
     this.prewarmShaders();
@@ -608,6 +616,13 @@ export class MissionView3D {
       if (d > 0) this.comms.netTraffic(d);
       this.nextNet = now + 14000 + Math.random() * 26000;
     }
+    // crew barks: the HUD shows them one at a time over our tank and says when each one starts
+    for (const b of s.crewBarks) {
+      const key = `${b.tick}|${b.from}|${b.text}`;
+      if (this.heardCrew.has(key)) continue;
+      this.heardCrew.add(key);
+      this.hud.crewSay(b.from, b.text);
+    }
     // barks: heard only from enemies you can see (the same rule as their callouts)
     const obs = s.obs;
     const barkKeys = new Set<string>();
@@ -669,7 +684,7 @@ export class MissionView3D {
       const ring = new THREE.Mesh(this.chargeRingGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.1, 0.35), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       ring.visible = false;
       this.scene.add(ring);
-      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, dead: false, flash: 0, deadT: -1, toss: null, glow, ring, shadowKey: [NaN, NaN, NaN, NaN, NaN, NaN, NaN], shadowSeen: false };
+      v = { model: buildTank(this.scene, t.team, beam), team: t.team, recoil: 0, dead: false, flash: 0, deadT: -1, toss: null, glow, ring, shadowKey: [NaN, NaN, NaN, NaN, NaN, NaN, NaN], shadowSeen: false, silent: 0 };
       this.tanks.set(t.id, v);
     }
     return v;
@@ -698,7 +713,10 @@ export class MissionView3D {
       m.barrel.position.x = 14 - v.recoil * 5;
       // In brush, a tank is drawn sunk a little and its lights dimmed (it is hidden from the enemy).
       m.root.position.y = t.inBrush ? -3 : 0;
-      this.headlights.request({ x, z: y, y: m.root.position.y, hull, intensity: t.quiet ? 60000 : 220000 });
+      // Silent running: the headlights go out and a very faint red lamp takes over, like the night
+      // lighting in a patrol car. Eased so it does not pop when the tank coasts in and out of `quiet`.
+      v.silent += ((t.quiet ? 1 : 0) - v.silent) * Math.min(1, dt * 6);
+      this.headlights.request({ x, z: y, y: m.root.position.y, hull, intensity: 220000 + (SILENT_LAMP - 220000) * v.silent, red: v.silent });
       // Hit glow: the armour flares orange-white for a moment.
       if (v.flash > 0.002) {
         v.flash *= Math.exp(-dt * 9);
@@ -708,7 +726,7 @@ export class MissionView3D {
       const health = t.hp / t.maxHp;
       if (health < 0.7) this.blasts.smolder(x, y, hull, Math.min(1, (0.7 - health) / 0.55), dt);
       this.renderCharge(t, v, x, y, tur, dt);
-      m.beam.visible = !t.quiet;
+      m.beam.visible = v.silent < 0.5;
       if (t.id === this.session.playerId) self = { x, y };
     }
     for (const [id, v] of this.tanks)

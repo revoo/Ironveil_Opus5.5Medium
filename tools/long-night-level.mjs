@@ -2,27 +2,45 @@
 //   node tools/long-night-level.mjs src/content/levels/long-night.json
 // Tile coords (col,row), inclusive rectangles; markers sit at tile centres. Prints the ASCII map.
 //
-// Four east-west strips joined by hairpin turns, eleven stretches:
+// A quiet opening stretch along the Wall, then four east-west strips joined by hairpin turns:
+//   strip 0 (west):  S0 the death strip inside the Wall. Nobody here: it is as long as the intro
+//                    dialogue (about 27 s flat out), and the first enemy only arrives at its end.
 //   strip 1 (east):  S1 garage · S2 allotments · S3 old town maze · S4 boulevard (convoy)
 //   strip 2 (west):  S5 factory (signal truck) · S6 river (two bridges + ford) · S7 park (quiet)
 //   strip 3 (east):  S8 rail yard · S9 border checkpoint
 //   strip 4 (west):  S10 approach (crew decision) · S11 fortress, extraction at the far west
 import { writeFileSync } from 'node:fs';
-const W = 160, H = 120, T = 32;
+const W = 160, H = 133, T = 32;
+/** Rows of the opening strip. Everything after it is written in its old row numbers and shifted down. */
+const OY = 13;
+let oy = 0;
 const g = Array.from({ length: H }, () => Array(W).fill('.'));
-const R = (c0, r0, c1, r1, ch) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (r >= 0 && c >= 0 && r < H && c < W) g[r][c] = ch; };
+const R = (c0, r0, c1, r1, ch) => { for (let r = r0 + oy; r <= r1 + oy; r++) for (let c = c0; c <= c1; c++) if (r >= 0 && c >= 0 && r < H && c < W) g[r][c] = ch; };
 const px = (c) => c * T + 16;
 
 // ---- frame, staggered building rows between the strips, open at alternating ends
 R(0, 0, W - 1, 0, '#'); R(0, H - 1, W - 1, H - 1, '#'); R(0, 0, 0, H - 1, '#'); R(W - 1, 0, W - 1, H - 1, '#');
 const divider = (c0, c1, r0, r1) => { for (let c = c0, k = 0; c <= c1; c += 9, k++) R(c, r0 + (k % 2), Math.min(c + 8, c1), r1, '#'); };
+
+// ================================================================ strip 0 (rows 1-10), heading west
+// The Wall is the map's north edge, doubled; we came through the breach at its east end.
+R(1, 1, 144, 1, '#');
+R(145, 1, 158, 9, '~');                      // rubble and churned mud at the breach
+R(5, 4, 147, 5, '=');                        // the patrol road along the Wall
+for (let c = 20; c <= 140; c += 24) R(c, 8, c + 1, 9, '#');   // watchtower footings
+for (const c of [12, 31, 57, 80, 103, 127]) R(c, 7, c + 4, 10, '"');
+for (const c of [40, 68, 92, 116]) R(c, 2, c + 3, 2, '"');
+R(134, 7, 138, 9, '#');                      // a border-troop hut, dark
+for (let c = 7, k = 0; c <= W - 2; c += 9, k++) R(c, 11 + (k % 2), Math.min(c + 8, W - 2), 13, '#'); // back of the allotments and the old town; open west (cols 1-6)
+
+oy = OY;
 divider(0, 143, 27, 29);  // open east (cols 144-158)
 divider(16, W - 1, 58, 60); // open west (cols 1-15)
 divider(0, 143, 89, 91);  // open east
-
 // ================================================================ strip 1 (rows 1-26), heading east
 // S1 garage
 R(1, 13, 50, 14, '=');
+R(3, 4 - OY, 4, 13, '=');                   // down from the Wall road
 R(8, 2, 11, 8, '#'); R(8, 19, 11, 25, '#'); R(2, 3, 5, 7, '"'); R(2, 19, 6, 23, '"');
 // S2 allotments: hedgerows and sheds
 R(15, 5, 43, 6, '"'); R(15, 20, 43, 21, '"');
@@ -108,9 +126,11 @@ R(24, 115, 28, 118, '"'); R(52, 114, 56, 118, '"'); R(68, 93, 74, 95, '"');
 
 const terrain = g.map((r) => r.join(''));
 
-const M = (id, c, r, facing, tags) => ({ id, x: px(c), y: px(r), ...(facing !== undefined ? { facing } : {}), ...(tags ? { tags } : {}) });
+const M = (id, c, r, facing, tags) => ({ id, x: px(c), y: px(r + OY), ...(facing !== undefined ? { facing } : {}), ...(tags ? { tags } : {}) });
 const markers = [
-  M('start', 4, 13, 0, ['player-start']),
+  M('start', 152, 4 - OY, 180, ['player-start']),
+  M('cp_garage', 4, 12, 0, ['checkpoint']),
+  M('allot_gate', 44, 13, 180),
   M('cp_oldtown', 47, 13, 0, ['checkpoint']),
   M('cp_boulevard', 102, 13, 0, ['checkpoint']),
   M('cp_factory', 151, 33, 90, ['checkpoint']),
@@ -144,8 +164,9 @@ const markers = [
   M('fo_qrf', 5, 94, 90),
   M('extract', 5, 108, undefined, ['landmark']),
 ];
-const Z = (id, c0, r0, c1, r1, tags) => ({ id, x: c0 * T, y: r0 * T, w: (c1 - c0 + 1) * T, h: (r1 - r0 + 1) * T, ...(tags ? { tags } : {}) });
+const Z = (id, c0, r0, c1, r1, tags) => ({ id, x: c0 * T, y: (r0 + OY) * T, w: (c1 - c0 + 1) * T, h: (r1 - r0 + 1) * T, ...(tags ? { tags } : {}) });
 const zones = [
+  Z('wall_end', 1, 1 - OY, 12, 10 - OY),
   Z('allotments', 14, 1, 30, 26),
   Z('z_oldtown', 46, 10, 48, 17),
   Z('oldtown', 51, 1, 64, 26),
@@ -165,7 +186,7 @@ const zones = [
   Z('fortress', 2, 92, 79, 118),
   Z('extraction', 1, 100, 8, 111, ['extraction']),
 ];
-const P = (id, pts, loop) => ({ id, points: pts.map(([c, r]) => ({ x: px(c), y: px(r) })), ...(loop ? { loop: true } : {}) });
+const P = (id, pts, loop) => ({ id, points: pts.map(([c, r]) => ({ x: px(c), y: px(r + OY) })), ...(loop ? { loop: true } : {}) });
 const paths = [
   P('allot_walk', [[19, 11], [31, 11], [31, 16], [19, 16]], true),
   P('ot_lane', [[72, 23], [90, 23]]),
@@ -180,8 +201,8 @@ const paths = [
   P('fo_flare_south', [[86, 116], [92, 116]]),
   P('fo_keep', [[27, 94], [53, 94], [53, 106], [27, 106]], true),
 ];
-const L = (c, r, rot = 0) => ({ kind: 'lamp', x: px(c), y: px(r), w: 8, h: 8, height: 120, rotation: rot });
-const B = (kind, c, r, w, h, height, rotation = 0) => ({ kind, x: px(c), y: px(r), w, h, height, rotation });
+const L = (c, r, rot = 0) => ({ kind: 'lamp', x: px(c), y: px(r + OY), w: 8, h: 8, height: 120, rotation: rot });
+const B = (kind, c, r, w, h, height, rotation = 0) => ({ kind, x: px(c), y: px(r + OY), w, h, height, rotation });
 const props = [
   // The renderer gives the first six lamps shadows: put them at the encounters.
   L(79, 14), L(125, 43), L(57, 38), L(56, 71), L(113, 72), L(81, 102),
@@ -193,6 +214,9 @@ const props = [
   B('barrel', 85, 101, 14, 14, 22), B('barrel', 86, 101, 14, 14, 22), B('barrel', 60, 96, 14, 14, 22),
   B('barrel', 78, 19, 14, 14, 22), B('barrel', 134, 47, 14, 14, 22),
   B('barrier', 152, 14, 64, 10, 24), B('railcar', 4, 96, 128, 48, 40),
+  // the Wall road: sparse lamps (unshadowed), barrels by the hut
+  L(128, 6 - OY, 90), L(96, 3 - OY, 90), L(64, 6 - OY, 90), L(32, 3 - OY, 90), L(6, 7 - OY),
+  B('barrel', 133, 8 - OY, 14, 14, 22), B('barrier', 146, 2 - OY, 12, 64, 20),
 ];
 const level = { format: 'ironveil-level', formatVersion: 1, id: 'long-night', version: 1, name: 'The Long Night', tile: T, terrain, markers, zones, paths, props };
 writeFileSync(process.argv[2], JSON.stringify(level, null, 1));

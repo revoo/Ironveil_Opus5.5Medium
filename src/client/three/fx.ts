@@ -540,6 +540,8 @@ export interface HeadlightReq {
   y: number;
   hull: number;
   intensity: number;
+  /** 0 = headlight (warm white, thrown ahead), 1 = silent running: a dim red lamp close to the hull. */
+  red: number;
 }
 
 /**
@@ -548,6 +550,9 @@ export interface HeadlightReq {
  * leaves vision) recompiled every material each time an enemy appeared or vanished: multi-second
  * freezes. Here the light count is constant; unused lights just sit at intensity 0.
  */
+const HEAD_WHITE = new THREE.Color(0xfff0cf);
+const HEAD_RED = new THREE.Color(0xff1a0c);
+
 export class Headlights {
   static readonly COUNT = 4;
   private lights: THREE.SpotLight[] = [];
@@ -582,8 +587,11 @@ export class Headlights {
       const c = Math.cos(r.hull);
       const s = Math.sin(r.hull);
       l.intensity = r.intensity;
-      l.position.set(r.x + c * 24, r.y + 13, r.z + s * 24);
-      l.target.position.set(r.x + c * 160, r.y, r.z + s * 160);
+      l.color.lerpColors(HEAD_WHITE, HEAD_RED, r.red);
+      // the red lamp points down at the ground just ahead instead of up the road
+      const reach = 160 - 110 * r.red;
+      l.position.set(r.x + c * 24, r.y + 13 + 14 * r.red, r.z + s * 24);
+      l.target.position.set(r.x + c * reach, r.y, r.z + s * reach);
     });
   }
 }

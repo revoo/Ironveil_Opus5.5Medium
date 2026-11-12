@@ -115,7 +115,8 @@ trigger (`"once": false`) fires each time its condition *becomes* true.
 
 | Action | Effect |
 |---|---|
-| `{ "radio": "text", "from": "Driver", "delay": 2 }` | a radio line, optionally delayed (seconds) |
+| `{ "radio": "text", "from": "Driver", "delay": 2 }` | a line in the comms panel's dialogue box, optionally delayed (seconds). Intro only: see "Dialogue pacing" |
+| `{ "bark": "text", "from": "Driver", "delay": 4 }` | a short crew callout over the player's tank (max 64 characters). Use this for everything after the intro |
 | `{ "setFlag": "route", "value": "north" }` | set a flag (default `true`) |
 | `{ "addFlag": "crew_tension", "by": 1 }` | add to a numeric flag |
 | `{ "objective": "id", "state": "complete" }` | change an objective (with an on-screen notice) |
@@ -156,26 +157,32 @@ dying can't skip a decision). On retry:
 
 ## Writing tips
 
-### Dialogue pacing (owner's rule, playtest of 2026-11-12)
+### Dialogue pacing (owner's rule, playtests of 2026-11-12)
 
 The comms panel's dialogue boxes cover a large part of the screen, so the player can't see well
-while one is up. Design every level around that:
+while one is up. Every level is built around that:
 
-- **Leave time for dialogue boxes to play out.** While a dialogue box is on screen, the level must
-  not ask anything of the player: no patrol about to round the corner, no timer running, no
-  choice due. Put each one in a quiet stretch (a safe start area, a checkpoint, cover the garrison
-  can't see into) that lasts at least as long as its lines.
-- **Dialogue boxes are for the main intro, and little else.** After the intro, crew chatter goes
-  through **friendly barks**: short callouts drawn over our own tank, the way garrison barks are
-  drawn over enemies. They don't block the view and need no pause in the level.
-- Not built yet: friendly barks don't exist in the code, and *The Long Night* and *Night Run*
-  still send their mid-mission crew lines to the comms panel. Until that work is done, treat the
-  two rules above as the target for new content.
+- **Dialogue boxes (`radio`) are for the intro only.** The intro is where the world building goes:
+  a few lines, queued together in the `intro` trigger.
+- **The opening stretch lasts as long as the intro.** Nobody is on it and nothing is asked of the
+  player. `dialogueSeconds()` (`three/comms.ts`) gives the length of the intro as the panel will
+  speak it; the stretch must take longer than that to drive **flat out**. On the road a tank does
+  about 209 px/s, so 20 s of dialogue needs roughly 130 tiles.
+- **The first enemy arrives when the intro is over**, not before: spawn it from a trigger at the
+  end of the opening stretch (gated on `after … since intro` as well), at a marker well off
+  screen, so it drives in. Save a checkpoint there too, so a retry doesn't replay the intro drive.
+- **After the intro, the crew talks in barks** (`bark`): short callouts over our own tank, at most
+  64 characters (the validator refuses longer ones). To the point, but still in the crew's voice:
+  "Truck's down. Let them file a complaint." Stagger two or three with `delay` (about 4 s apart);
+  the HUD shows them one at a time, and a line with a `!` jumps the queue.
+
+*The Long Night* follows all of this (its opening is the road along the Wall), and
+`tests/long-night.test.ts` checks it: the timing, the first enemy, and that no `radio` action
+exists outside the intro. *Night Run* uses barks after its intro, but its opening stretch has not
+been lengthened yet: its first patrol is still on the map from the start.
 
 ### General
 
-- Keep crew lines short and staggered with `delay`. Five lines in one second are unreadable while
-  driving.
 - Gate story beats on **zones** rather than timers wherever you can, so players can't miss them.
 - A location-based choice can be outrun (the grey-box test autopilot reaches the depot before the
   15 s timer runs out). If it matters, let a later trigger read the flag *or its absence*.

@@ -1,6 +1,6 @@
 // Check every id a mission refers to against its level and itself. Returns readable problems.
 import type { Level } from '../../level/load';
-import type { Action, Condition, MissionDef, PostureDef, UnitDef } from './types';
+import { CREW_BARK_MAX, type Action, type Condition, type MissionDef, type PostureDef, type UnitDef } from './types';
 
 export function validateMission(def: MissionDef, level: Level): string[] {
   const p: string[] = [];
@@ -62,6 +62,7 @@ export function validateMission(def: MissionDef, level: Level): string[] {
     const where = `trigger "${t.id}"`;
     cond(t.when, where);
     visitActions(t.do, (a) => {
+      if ('bark' in a && a.bark.length > CREW_BARK_MAX) p.push(`${where}: bark "${a.bark}" is ${a.bark.length} characters (at most ${CREW_BARK_MAX}: say less, or use the intro dialogue)`);
       if ('objective' in a && !objectives.has(a.objective)) p.push(`${where}: objective "${a.objective}" does not exist`);
       if ('order' in a) {
         if (!units.has(a.order)) p.push(`${where}: unit "${a.order}" does not exist`);

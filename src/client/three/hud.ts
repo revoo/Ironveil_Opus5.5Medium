@@ -12,12 +12,13 @@
 //   bottom-left   (beside the hull) the cannon gauge: charge, burst threshold, damage, state
 //   over enemies  ? with a suspicion arc, ! in combat, ◆ for a boss; barks as callouts above them;
 //                 a health bar once damaged (bright after a hit, with the lost chunk draining away)
+//   over our tank the crew's barks, one at a time (after the intro, the crew only talks this way)
 //   cursor hits   a hit marker on every hit of ours, red and larger on a kill
 import type { MissionSession } from '../../game/mission/session';
 import type { Observation, TankView } from '../../sim/observation';
 import { WEAPON_TICKS, shotStats } from '../../sim/weapon';
 import { TUNING } from '../../sim/tuning';
-import { displayName } from '../../content/lore';
+import { CREW, displayName } from '../../content/lore';
 
 const ICON = {
   smoke: '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.2 9.2 4.4 4.4 0 0 0 7 18z"/></svg>',
@@ -48,6 +49,13 @@ export class Hud3D {
   private hint = 0;
   private hullSegs: HTMLElement[] = [];
   private bubbles = new Map<number, HTMLElement>();
+  /** Crew barks waiting their turn, and the one on screen (seconds left). */
+  private crewQueue: { from: string; text: string }[] = [];
+  private crewEl: HTMLElement | null = null;
+  private crewLeft = 0;
+  private crewGap = 0;
+  /** Called when a crew bark goes on screen, so its voice starts with it. */
+  onCrewBark: ((from: string, text: string) => void) | null = null;
   /** Enemy markers, one element per enemy, rebuilt only when its kind changes (?, !, health bar). */
   private marks = new Map<number, { el: HTMLDivElement; shape: string; arc: SVGCircleElement | null; hp: HTMLElement | null; trail: HTMLElement | null; fill: HTMLElement | null }>();
   /** Per enemy: when we last saw it hit (performance.now ms) and the trailing "lost health" value. */
@@ -109,6 +117,42 @@ export class Hud3D {
     c.classList.remove('hit', 'kill');
     void c.offsetWidth; // restart the animation
     c.classList.add(kill ? 'kill' : 'hit');
+  }
+
+  /** Queue a short callout from our own crew; it is drawn over our tank when its turn comes. */
+  crewSay(from: string, text: string): void {
+    // an urgent line ("Seen!") is not kept waiting behind route chatter
+    if (/!/.test(text)) this.crewQueue.length = 0;
+    this.crewQueue.push({ from, text });
+    if (this.crewQueue.length > 4) this.crewQueue.shift();
+  }
+
+  private updateCrew(me: TankView | undefined, project: (x: number, y: number, h: number) => { x: number; y: number; on: boolean }, dt: number): void {
+    dt = Math.min(dt, 0.1);
+    if (this.crewEl) {
+      this.crewLeft -= dt;
+      const urgentNext = this.crewQueue.length > 0 && /!/.test(this.crewQueue[0]!.text);
+      if (this.crewLeft <= 0 || !me || urgentNext) {
+        this.crewEl.remove();
+        this.crewEl = null;
+        this.crewGap = urgentNext ? 0 : 0.35;
+      }
+    } else if (this.crewGap > 0) this.crewGap -= dt;
+    else if (me && this.crewQueue.length) {
+      const b = this.crewQueue.shift()!;
+      const el = document.createElement('div');
+      el.className = `bark crew${/!/.test(b.text) ? ' urgent' : ''}`;
+      el.innerHTML = `<div class="box"><span class="who">${esc(CREW[b.from]?.nick ?? b.from)}</span><span class="say">${esc(b.text)}</span></div>`;
+      this.el.barks.appendChild(el);
+      this.crewEl = el;
+      this.crewLeft = 1.7 + b.text.length * 0.05;
+      this.onCrewBark?.(b.from, b.text);
+    }
+    if (this.crewEl && me) {
+      const p = project(me.x, me.y, 64);
+      this.crewEl.style.opacity = String(Math.min(1, this.crewLeft / 0.4));
+      this.crewEl.style.transform = `translate(${p.x.toFixed(0)}px,${p.y.toFixed(0)}px)`;
+    }
   }
 
   /** An enemy took damage: its health bar lights up. */
@@ -293,6 +337,7 @@ export class Hud3D {
 
     // ---- barks: callouts over the enemy that spoke, only while that enemy is visible
     this.updateBarks(cur, project);
+    this.updateCrew(me, project, dt);
 
     // ---- first-seconds hint
     this.hint += dt;

@@ -326,6 +326,9 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-barks .bark { position: absolute; left: 0; top: 0; width: 0; height: 0; --tone: var(--dim); transition: opacity .2s linear; }
 .h3-barks .bark.sus { --tone: var(--amber); }
 .h3-barks .bark.combat { --tone: var(--rust); }
+/* our own crew, over our tank: steel blue like the rest of our side's HUD marks */
+.h3-barks .bark.crew { --tone: var(--steel); z-index: 1; }
+.h3-barks .bark.crew.urgent { --tone: var(--red); }
 .h3-barks .bark::before { content: ''; position: absolute; left: -.5px; bottom: 18px; width: 1px; height: 16px;
   background: linear-gradient(to top, transparent, var(--tone)); opacity: .75; }
 .h3-barks .box { position: absolute; bottom: 34px; left: 0; transform: translateX(-50%); transform-origin: 50% 100%; white-space: nowrap;

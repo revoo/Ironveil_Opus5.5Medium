@@ -4,7 +4,7 @@
 //   node tools/perf/cpu.mjs
 import { open } from './lib.mjs';
 const { browser, page } = await open({ w: 657, h: 352 });
-for (const [name, [x, y]] of Object.entries({ start: [144, 432], plaza: [2544, 500] })) {
+for (const [name, [x, y]] of Object.entries({ start: [144, 848], plaza: [2544, 916] })) {
   const r = await page.evaluate(([x, y]) => {
     const v = window.__ironveil.view();
     window.__settle(x, y, 5); window.__sync();
