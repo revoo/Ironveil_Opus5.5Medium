@@ -100,7 +100,7 @@ npm run dev         # http://localhost:5173
 ## Preview builds (claude.ai artifacts)
 
 The owner tests through private claude.ai artifacts. Republish to the same URL after changes:
-- Game: https://claude.ai/artifact/UveMJUFVhBM6xfCTivZXxg — `npm run build`, then a page file with the
+- Game: https://claude.ai/artifact/5XRAYJFDgPBmwN3iNetP8f — `npm run build`, then a page file with the
   `<title>`, the Google Fonts link from `index.html`, the built CSS **inlined** in `<style>` (artifacts only
   allow external stylesheets from Google Fonts), `<div id="game"></div><div id="ui"></div>`, and
   `<script type="module" src="./assets/index-*.js">`; publish with the JS in `files` and `null` the old JS name.
@@ -131,6 +131,11 @@ measured results, how to read the playtest perf log, and practical notes for clo
   the owner's playtest ran **120 fps locked at 100% render scale** (1314×704 window), no stutters. At the
   display's cap the perf log can no longer show headroom: docs/PERF-PLAN.md starts with a benchmark mode
   for that. Not yet verified by a human: the audio mix, combat numbers.
+- **Owner's rules from the 2026-11-12 playtest** (docs/MISSIONS.md, "Dialogue pacing"): dialogue boxes cover
+  too much of the screen, so levels must leave quiet time for them, and after the main intro crew chatter
+  goes through friendly barks only. Friendly barks are **not built yet** and the two missions still use the
+  comms panel mid-mission: that conversion is the next content/HUD job. The 3D view has no minimap (removed
+  on the owner's word; don't add one back). Skirmish keeps its own.
 - Awaiting owner decisions: docs/CREW-PROPOSAL.md (crew health/morale/trust, value-tagged choices).
 - Candidates for next features: crew system phase 1, Ink dialogue, first real LDtk mission, recorded
   CC0 weapon/engine samples, a crew line when the player takes a heavy hit, steam on a vented cannon.

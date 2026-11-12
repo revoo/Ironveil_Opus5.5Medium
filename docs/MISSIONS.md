@@ -156,6 +156,24 @@ dying can't skip a decision). On retry:
 
 ## Writing tips
 
+### Dialogue pacing (owner's rule, playtest of 2026-11-12)
+
+The comms panel's dialogue boxes cover a large part of the screen, so the player can't see well
+while one is up. Design every level around that:
+
+- **Leave time for dialogue boxes to play out.** While a dialogue box is on screen, the level must
+  not ask anything of the player: no patrol about to round the corner, no timer running, no
+  choice due. Put each one in a quiet stretch (a safe start area, a checkpoint, cover the garrison
+  can't see into) that lasts at least as long as its lines.
+- **Dialogue boxes are for the main intro, and little else.** After the intro, crew chatter goes
+  through **friendly barks**: short callouts drawn over our own tank, the way garrison barks are
+  drawn over enemies. They don't block the view and need no pause in the level.
+- Not built yet: friendly barks don't exist in the code, and *The Long Night* and *Night Run*
+  still send their mid-mission crew lines to the comms panel. Until that work is done, treat the
+  two rules above as the target for new content.
+
+### General
+
 - Keep crew lines short and staggered with `delay`. Five lines in one second are unreadable while
   driving.
 - Gate story beats on **zones** rather than timers wherever you can, so players can't miss them.

@@ -9,7 +9,6 @@ import type { Observation, ObsEvent, TankView } from '../../sim/observation';
 import type { Vec } from '../../sim/math';
 import { angleDiff } from '../../sim/math';
 import { TUNING } from '../../sim/tuning';
-import { Terrain, tileAt } from '../../sim/map';
 import type { InputManager } from '../input';
 import type { AudioEngine } from '../audio';
 import type { Settings } from '../settings';
@@ -55,14 +54,6 @@ interface TankVis {
   shadowKey: number[];
   shadowSeen: boolean;
 }
-
-/** Screen corners (NDC), in drawing order for the minimap's view outline. */
-const FOOTPRINT = [
-  [-1, -1],
-  [1, -1],
-  [1, 1],
-  [-1, 1],
-] as const;
 
 export class MissionView3D {
   readonly session: MissionSession;
@@ -118,8 +109,6 @@ export class MissionView3D {
   /** When the next bit of distant net traffic may play (performance.now ms). */
   private nextNet = performance.now() + 9000;
   private telemetry: Telemetry;
-  private minimap: HTMLCanvasElement;
-  private miniBase: HTMLCanvasElement;
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   /** The view's size in CSS pixels, read in `resize` only: asking the DOM every frame forces a layout. */
@@ -128,8 +117,6 @@ export class MissionView3D {
   // scratch objects for the per-frame maths
   private v2 = new THREE.Vector2();
   private v3 = new THREE.Vector3();
-  /** The minimap is redrawn once per simulation tick, not once per frame. */
-  private miniTick = -1;
   private listeners: (() => void)[] = [];
   // audio direction state
   private heardRadio = new Set<string>();
@@ -234,17 +221,13 @@ export class MissionView3D {
     const me = this.session.world.tank(this.session.playerId);
     this.camTarget.set(me.pos.x, 0, me.pos.y);
 
-    // ---- DOM: vehicle panel, radio, minimap, enemy alert markers
+    // ---- DOM: vehicle panel, radio, enemy alert markers
     this.hud = new Hud3D(container, this.session);
     this.comms = new Comms(this.hud.root, (l, u, v) => this.d.audio.transmit(u, v, l.enemy));
     this.comms.setVisible(d.settings.showRadio);
     this.telemetry = new Telemetry(this.hud.root, this.renderer);
     this.perfLog = new PerfLog({ mission: this.session.def.id, low: this.d.settings.lowEffects }, this.renderer.getContext() as WebGL2RenderingContext);
     this.telemetry.setKeyLabel(codeLabel(d.settings.bindings.telemetry[0] ?? 'KeyV'));
-    this.minimap = document.createElement('canvas');
-    this.minimap.className = 'minimap3d';
-    container.appendChild(this.minimap);
-    this.miniBase = this.drawMiniBase();
 
     const onMove = (e: MouseEvent) => {
       const r = this.renderer.domElement.getBoundingClientRect();
@@ -337,56 +320,6 @@ export class MissionView3D {
     const base = Math.min(devicePixelRatio, this.d.settings.lowEffects ? 1 : 1.5);
     const dpr = Math.max(Math.min(base, 0.75), base * this.dynRes.scale);
     this.post.setSize(w, h, dpr);
-    // (setting a canvas's size clears it, so only when it really changes)
-    const mh = this.miniFollows() ? 147 : Math.round((196 * this.world.height) / this.world.width);
-    if (this.minimap.width !== 196 || this.minimap.height !== mh) {
-      this.minimap.width = 196;
-      this.minimap.height = mh;
-      this.miniTick = -1;
-    }
-  }
-
-  private drawMiniBase(): HTMLCanvasElement {
-    const map = this.session.map;
-    const c = document.createElement('canvas');
-    c.width = map.cols * 4;
-    c.height = map.rows * 4;
-    const ctx = c.getContext('2d')!;
-    const col: Record<number, string> = { [Terrain.Grass]: '#1f2f26', [Terrain.Road]: '#6d6450', [Terrain.Mud]: '#5a4330', [Terrain.Brush]: '#2f4d31', [Terrain.Wall]: '#b8b6ab' };
-    for (let r = 0; r < map.rows; r++)
-      for (let cc = 0; cc < map.cols; cc++) {
-        ctx.fillStyle = col[tileAt(map, cc, r)] ?? '#1f2f26';
-        ctx.fillRect(cc * 4, r * 4, 4, 4);
-      }
-    ctx.strokeStyle = '#87c9e8';
-    ctx.lineWidth = 2;
-    for (const z of this.session.level.zonesTagged('extraction')) ctx.strokeRect((z.x / map.tile) * 4, (z.y / map.tile) * 4, (z.w / map.tile) * 4, (z.h / map.tile) * 4);
-    // Checkpoints are level data, not intel: small amber diamonds help find the way on big maps.
-    ctx.fillStyle = 'rgba(241,208,156,0.85)';
-    for (const m of this.session.level.markersTagged('checkpoint')) {
-      const x = (m.x / map.tile) * 4, y = (m.y / map.tile) * 4, r = this.miniFollows() ? 5 : 4;
-      ctx.beginPath();
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r, y);
-      ctx.fill();
-    }
-    return c;
-  }
-
-  /** Big maps get a minimap window that follows the player instead of the whole map squeezed in. */
-  private miniFollows(): boolean {
-    return this.world.width > 4200 || this.world.height > 3000;
-  }
-
-  /** The world rectangle the minimap shows. */
-  private miniWindow(selfPos: Vec | null): { x0: number; y0: number; w: number; h: number } {
-    if (!this.miniFollows()) return { x0: 0, y0: 0, w: this.world.width, h: this.world.height };
-    const w = Math.min(this.world.width, 2600), h = Math.min(this.world.height, (w * 147) / 196);
-    const c = selfPos ?? { x: w / 2, y: h / 2 };
-    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-    return { x0: clamp(c.x - w / 2, 0, this.world.width - w), y0: clamp(c.y - h / 2, 0, this.world.height - h), w, h };
   }
 
   // ------------------------------------------------------------------ camera
@@ -533,7 +466,6 @@ export class MissionView3D {
     this.telemetry.dispose();
     this.comms.dispose();
     this.hud.dispose();
-    this.minimap.remove();
   }
 
   // ------------------------------------------------------------------ frame
@@ -630,7 +562,6 @@ export class MissionView3D {
     this.hud.update(cur, me, this.mousePx, this.aim, (x, y, h) => this.project(x, y, h), dt);
     this.comms.update(dt, s.paused);
     this.directAudio(now);
-    this.renderMinimap(cur, selfPos);
     const tEnd = performance.now();
     this.telemetry.frameEnd(tEnd, { ticks, simMs, renderMs: tHud - tRender, hudMs: tEnd - tHud, cpuMs: tEnd - t0 });
     if (!s.paused) {
@@ -987,54 +918,5 @@ export class MissionView3D {
       default:
         break;
     }
-  }
-
-  private renderMinimap(cur: Observation, selfPos: Vec | null): void {
-    // the simulation ticks at 30 Hz: on a 60 or 120 Hz display most frames have nothing new to plot
-    if (cur.tick === this.miniTick) return;
-    this.miniTick = cur.tick;
-    const ctx = this.minimap.getContext('2d')!;
-    const W = this.minimap.width, H = this.minimap.height;
-    const win = this.miniWindow(selfPos);
-    const sx = W / win.w, sy = H / win.h;
-    const k = 4 / this.session.map.tile; // miniBase pixels per world px
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    ctx.globalAlpha = 0.9;
-    ctx.drawImage(this.miniBase, win.x0 * k, win.y0 * k, win.w * k, win.h * k, 0, 0, W, H);
-    ctx.globalAlpha = 1;
-    ctx.translate(-win.x0 * sx, -win.y0 * sy);
-    for (const t of cur.tanks) {
-      if (!t.alive) continue;
-      const mine = t.id === this.session.playerId;
-      ctx.fillStyle = mine ? '#87c9e8' : '#ff9177';
-      if (mine && selfPos) {
-        ctx.save();
-        ctx.translate(selfPos.x * sx, selfPos.y * sy);
-        ctx.rotate(t.hull);
-        ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(-4, 4);
-        ctx.lineTo(-4, -4);
-        ctx.fill();
-        ctx.restore();
-      } else ctx.fillRect(t.x * sx - 3, t.y * sy - 3, 6, 6);
-    }
-    for (const lk of cur.lastKnown) {
-      ctx.strokeStyle = 'rgba(255,145,119,0.6)';
-      ctx.strokeRect(lk.x * sx - 3, lk.y * sy - 3, 6, 6);
-    }
-    // view footprint
-    ctx.strokeStyle = 'rgba(237,244,223,0.35)';
-    ctx.beginPath();
-    FOOTPRINT.forEach(([x, y], i) => {
-      this.ray.setFromCamera(this.v2.set(x, y), this.camera);
-      const c = this.v3;
-      if (!this.ray.ray.intersectPlane(this.plane, c)) return;
-      if (i) ctx.lineTo(c.x * sx, c.z * sy);
-      else ctx.moveTo(c.x * sx, c.z * sy);
-    });
-    ctx.closePath();
-    ctx.stroke();
   }
 }

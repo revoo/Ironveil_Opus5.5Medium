@@ -46,7 +46,7 @@ export async function open({ port = PORT, w = 1314, h = 704, mission = 'long-nig
   await page.evaluate(() => { window.__reseed(); document.querySelector('#go').click(); });
   await page.waitForFunction(() => !!window.__ironveil.view(), null, { timeout: 600000 });
   await takeOver(page);
-  if (hideHud) await page.addStyleTag({ content: '.h3, .minimap3d { visibility: hidden !important; }' });
+  if (hideHud) await page.addStyleTag({ content: '.h3 { visibility: hidden !important; }' });
   return { browser, page, errors };
 }
 

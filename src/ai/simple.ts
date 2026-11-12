@@ -253,6 +253,10 @@ export class SimpleController {
     for (const [id, u] of this.units) {
       const self = views.get(id);
       if (!self || !self.alive) {
+        // A wreck is no longer looking for anyone: without this a unit killed mid-fight would
+        // hold the detection meter at "spotted" for the rest of the mission.
+        u.state = 'calm';
+        u.suspicion = 0;
         out[id] = neutralInput();
         continue;
       }

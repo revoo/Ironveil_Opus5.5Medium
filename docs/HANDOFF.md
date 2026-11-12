@@ -79,7 +79,7 @@ How the pieces fit now (details in CLAUDE.md gotchas):
 
 ## The playtest perf log (reading it)
 
-When the game runs as the owner's preview artifact, it writes to the artifact's private database. Use the `ArtifactData` tool with url `https://claude.ai/artifact/UveMJUFVhBM6xfCTivZXxg`:
+When the game runs as the owner's preview artifact, it writes to the artifact's private database. Use the `ArtifactData` tool with url `https://claude.ai/artifact/5XRAYJFDgPBmwN3iNetP8f` (published 2026-11-12 from a new account; the earlier preview `UveMJUFVhBM6xfCTivZXxg` and its two logged sessions can't be opened from it):
 
 1. `list` collection `perf`. You get one document per session: machine, settings, build and a summary.
 2. `list` collection `perf/<session id>/chunks`, with `out_dir` set to save the files.

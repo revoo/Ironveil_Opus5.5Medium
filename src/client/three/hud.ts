@@ -4,7 +4,6 @@
 //
 //   top-left      operation title + objectives (completed ones fold away)
 //   top-centre    detection: a slim meter that is nearly invisible while you are hidden
-//   top-right     minimap (owned by the view)
 //   bottom-centre the comms panel (`comms.ts`, owned by the view): crew radio with portraits
 //   bottom-left   a slim hull gauge with smoke / silent / brush chips
 //   bottom-right  real-time decisions

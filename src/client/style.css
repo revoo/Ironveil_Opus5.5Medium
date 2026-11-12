@@ -344,6 +344,5 @@ details.skirmish[open] summary { margin-bottom: 8px; }
 .h3-hint { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); display: flex; gap: 18px; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--dim); transition: opacity .4s; }
 .h3-hint span { display: inline-flex; align-items: center; gap: 5px; }
 .h3-hint kbd { min-width: 18px; height: 18px; font-size: 11px; }
-.minimap3d { position: absolute; top: 22px; right: 22px; pointer-events: none; border: 1px solid rgba(237,244,223,.16); border-radius: 3px; opacity: .9; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
 @media (max-width: 1100px) { .h3-hint { display: none; } .h3-status .gun .st { display: none; } }
 @media (prefers-reduced-motion: reduce) { .h3 * { animation: none !important; transition: none !important; } }
